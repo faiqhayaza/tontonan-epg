@@ -15,9 +15,11 @@
  * simply absent from epg.json and the site keeps its "no guide" wording.
  *
  * Adapters:
- *   iptvx   epg.iptvx.one        one gzipped XMLTV file (343 channels)
- *   mjh     i.mjh.nz             per-service XMLTV files on GitHub raw
- *   myjcom  tvguide.myjcom.jp    JSON API (JP channels incl. TBS, Fuji TV)
+ *   iptvx    epg.iptvx.one        one gzipped XMLTV file (343 channels)
+ *   mjh      i.mjh.nz             per-service XMLTV files on GitHub raw
+ *   myjcom   tvguide.myjcom.jp    JSON API (JP channels incl. TBS, Fuji TV)
+ *   epgshare epgshare01.online    per-region XMLTV files; generic adapter
+ *                                 keyed by catalog tvg-id (see adapterEpgshare)
  */
 import fs from "node:fs";
 import zlib from "node:zlib";
@@ -168,7 +170,132 @@ async function adapterMyjcom() {
   report.myjcom = { channels: rows.length, withData: rows.filter(([cid]) => results[cid]?.length).length };
 }
 
-for (const [name, fn] of [["iptvx", adapterIptvx], ["mjh", adapterMjh], ["myjcom", adapterMyjcom]]) {
+/* ------------------------------------------------------------------ *
+ * epgshare: generic XMLTV adapter over EPGShare's per-region files.
+ *
+ * EPGShare (epgshare01.online) republishes ready-made XMLTV guides,
+ * one .xml.gz per region (US2, IN1, FR1, ...), refreshed daily. Its
+ * channel ids are name-derived ("Sky.HistoryHD.uk") rather than
+ * iptv-org ids ("SkyHistoryHD.uk"), so matching is layered:
+ *   1. exact base-id match (catalog id minus any "@feed" suffix)
+ *   2. case-insensitive base-id match
+ *   3. punctuation-stripped match ("MBC.1.ae" -> "MBC1.ae"), accepted
+ *      only when the stripped form is unique on BOTH sides, is at
+ *      least 4 chars, and the country suffix agrees when both ids
+ *      carry one.
+ * Each region also publishes a .txt channel listing; those are tiny,
+ * so we fetch listings first and only download a region's XML when it
+ * can actually contribute a channel the earlier adapters missed.
+ * ------------------------------------------------------------------ */
+const EPGSHARE_REGIONS = (
+  "AE1 AL1 ALJAZEERA1 AR1 ASIANTELEVISION1 AT1 AU1 AUDACY1 BA1 BB1 BE2 BEIN1 BG1 BR1 BR2 " +
+  "CA2 CH1 CL1 CO1 CR1 CY1 CZ1 DE1 DELUXEMUSIC1 DIRECTVSPORTS1 DISTROTV1 DK1 DO1 DRAFTKINGS1 " +
+  "EC1 EG1 ES1 FANDUEL1 FI1 FR1 GR1 HK1 HR1 HU1 ID1 IE1 IL1 IN1 IN2 IN4 IT1 JM1 JP1 JP2 KE1 " +
+  "KR1 KZ1 LT1 LU1 LV1 MN1 MT1 MUSICBOX1 MX1 MY1 NG1 NL1 NO1 NZ1 PA1 PE1 PEACOCK1 PH1 PH2 PK1 " +
+  "PL1 PLEX1 PT1 RAKUTEN1 RALLY_TV1 RO1 RO2 RS1 SA1 SA2 SE1 SG1 SK1 SPORTKLUB1 SSPORTPLUS1 " +
+  "SV1 TBNPLUS1 TH1 THESPORTPLUS1 TR1 TR3 UA1 UK1 US2 US_LOCALS1 US_SPORTS1 UY1 VN1 VOA1 " +
+  "WHALETVPLUS1 ZA1"
+).split(" ");
+
+async function adapterEpgshare() {
+  const catBuf = await fetchBuf("https://tontonan.online/catalog.json", 60_000);
+  const catalog = JSON.parse(catBuf.toString("utf8"));
+  const baseOf = (id) => String(id).split("@")[0];
+  const ccOf = (s) => /\.([a-z]{2})$/i.exec(s)?.[1].toLowerCase() ?? null;
+  const strip = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const byBase = new Map(); // base id -> [catalogId]
+  const byLower = new Map(); // lowercased base -> base
+  const stripCount = new Map(); // stripped base -> how many catalog bases share it
+  for (const ch of catalog.channels ?? []) {
+    const b = baseOf(ch.id);
+    if (!byBase.has(b)) byBase.set(b, []);
+    byBase.get(b).push(ch.id);
+    byLower.set(b.toLowerCase(), b);
+    stripCount.set(strip(b), (stripCount.get(strip(b)) ?? 0) + 1);
+  }
+
+  // Fetch all region listings first (small); collect esId -> regions.
+  const esRegions = new Map();
+  const listQueue = [...EPGSHARE_REGIONS];
+  async function listWorker() {
+    while (listQueue.length) {
+      const region = listQueue.shift();
+      try {
+        const txt = (await fetchBuf(`https://epgshare01.online/epgshare01/epg_ripper_${region}.txt`, 30_000)).toString("utf8");
+        for (let line of txt.split(/\r?\n/)) {
+          line = line.trim();
+          if (!line || /^\d+$/.test(line) || line.startsWith("--")) continue;
+          if (!esRegions.has(line)) esRegions.set(line, []);
+          esRegions.get(line).push(region);
+        }
+      } catch (e) {
+        console.error(`epgshare list ${region}: ${e.message}`);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, listWorker));
+
+  const esStripCount = new Map();
+  for (const id of esRegions.keys()) esStripCount.set(strip(id), (esStripCount.get(strip(id)) ?? 0) + 1);
+  const byStrip = new Map(); // stripped base -> base, unique catalog bases only
+  for (const b of byBase.keys()) if (stripCount.get(strip(b)) === 1) byStrip.set(strip(b), b);
+
+  // Resolve each EPGShare id to at most one catalog channel; an id is
+  // claimed by the first region (in EPGSHARE_REGIONS order) listing it.
+  // Channels already covered by earlier adapters are left to them.
+  const wantedByRegion = new Map(); // region -> Map(esId -> catalogId)
+  const claimed = new Set();
+  for (const region of EPGSHARE_REGIONS) {
+    for (const [esId, regions] of esRegions) {
+      if (regions[0] !== region) continue;
+      let base = null;
+      if (byBase.has(esId)) base = esId;
+      else if (byLower.has(esId.toLowerCase())) base = byLower.get(esId.toLowerCase());
+      else {
+        const key = strip(esId);
+        if (key.length >= 4 && esStripCount.get(key) === 1) {
+          const b = byStrip.get(key);
+          if (b && (!ccOf(b) || !ccOf(esId) || ccOf(b) === ccOf(esId))) base = b;
+        }
+      }
+      if (!base) continue;
+      for (const cid of byBase.get(base)) {
+        if (claimed.has(cid) || results[cid]?.length) continue;
+        claimed.add(cid);
+        if (!wantedByRegion.has(region)) wantedByRegion.set(region, new Map());
+        wantedByRegion.get(region).set(esId, cid);
+        break; // one catalog id (feed variant) per base id is enough
+      }
+    }
+  }
+
+  let files = 0;
+  let matched = 0;
+  for (const wanted of wantedByRegion.values()) matched += wanted.size;
+  const dlQueue = [...wantedByRegion.entries()];
+  async function dlWorker() {
+    while (dlQueue.length) {
+      const [region, wanted] = dlQueue.shift();
+      try {
+        const gz = await fetchBuf(`https://epgshare01.online/epgshare01/epg_ripper_${region}.xml.gz`, 180_000);
+        extractXmltv(zlib.gunzipSync(gz).toString("utf8"), wanted, results);
+        files++;
+      } catch (e) {
+        console.error(`epgshare ${region}: ${e.message}`);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: 3 }, dlWorker));
+  report.epgshare = {
+    channels: matched,
+    files,
+    regions: wantedByRegion.size,
+    withData: [...claimed].filter((cid) => results[cid]?.length).length,
+  };
+}
+
+for (const [name, fn] of [["iptvx", adapterIptvx], ["mjh", adapterMjh], ["myjcom", adapterMyjcom], ["epgshare", adapterEpgshare]]) {
   try {
     await fn();
     console.log(name, JSON.stringify(report[name]));

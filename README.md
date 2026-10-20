@@ -19,6 +19,9 @@ Sources (guide availability data: [iptv-org](https://github.com/iptv-org/databas
 - `epg.iptvx.one` XMLTV feed
 - `i.mjh.nz` XMLTV files (matthuisman)
 - `tvguide.myjcom.jp` JSON API (Japanese channels)
+- `epgshare01.online` per-region XMLTV files (EPGShare) — generic adapter
+  matching catalog channels by tvg-id (exact / case-insensitive /
+  punctuation-stripped); only downloads regions that add new channels
 
 `matches.json` maps catalog channel ids to guide sources. Each source is
 failure-isolated: if one is down, only its channels are missing from that build.
