@@ -1,27 +1,27 @@
 {
-  "generatedAt": 1792791147352,
+  "generatedAt": 1792817425312,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 329,
+      "withData": 320,
       "xmlMB": 313.7
     },
     "mjh": {
       "channels": 787,
       "files": 26,
       "paths": 27,
-      "withData": 639
+      "withData": 680
     },
     "myjcom": {
       "channels": 5,
       "withData": 5
     },
     "epgshare": {
-      "channels": 943,
-      "files": 59,
-      "regions": 59,
-      "withData": 723
+      "channels": 937,
+      "files": 58,
+      "regions": 58,
+      "withData": 539
     }
   },
-  "channelsWithData": 1696
+  "channelsWithData": 1544
 }
