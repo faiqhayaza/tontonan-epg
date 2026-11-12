@@ -151,7 +151,14 @@ const EPGSHARE_REGIONS = (
 ).split(" ");
 
 async function adapterEpgshare() {
-  const catBuf = await fetchBuf("https://tontonan.online/catalog.json", 60_000);
+  // Fetch the catalog from the Oracle A1 mirror, NOT tontonan.online:
+  // Cloudflare Bot Fight Mode challenges GitHub Actions runners, so the
+  // site's own catalog.json 403s from the workflow (Nov 2026, feed halved
+  // to ~1,000 channels for 2 days). The A1 serves the same file at
+  // https://oracle-relay.faiqhayaza.com/catalog.json (Caddy static file,
+  // DNS-only, no Cloudflare in the path); the PC catalog build publishes
+  // it there on every rebuild (scripts/gen-catalog-json.mjs in tontonan).
+  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", 60_000);
   const catalog = JSON.parse(catBuf.toString("utf8"));
   const baseOf = (id) => String(id).split("@")[0];
   const ccOf = (s) => /\.([a-z]{2})$/i.exec(s)?.[1].toLowerCase() ?? null;
@@ -245,6 +252,9 @@ async function adapterEpgshare() {
     files,
     regions: wantedByRegion.size,
     withData: [...claimed].filter((cid) => results[cid]?.length).length,
+    // The catalog's own timestamp: makes a stale mirror visible in the
+    // report (the A1 file must track the live catalog's generatedAt).
+    catalogGeneratedAt: catalog.generatedAt ?? null,
   };
 }
 
