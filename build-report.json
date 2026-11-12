@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1794508641333,
+  "generatedAt": 1794508807100,
   "adapters": {
     "iptvx": {
       "channels": 343,
@@ -43,7 +43,7 @@
   },
   "channelsWithData": 1890,
   "gate": {
-    "prevChannelsWithData": 1905,
+    "prevChannelsWithData": 1890,
     "pass": true
   }
 }
