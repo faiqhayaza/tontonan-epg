@@ -1,16 +1,16 @@
 {
-  "generatedAt": 1794450014288,
+  "generatedAt": 1794480569446,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 331,
-      "xmlMB": 312
+      "withData": 330,
+      "xmlMB": 324.8
     },
     "mjh": {
       "channels": 787,
       "files": 26,
       "paths": 27,
-      "withData": 680
+      "withData": 677
     },
     "myjcom": {
       "channels": 5,
@@ -20,5 +20,5 @@
       "error": "HTTP 403"
     }
   },
-  "channelsWithData": 1016
+  "channelsWithData": 1012
 }
