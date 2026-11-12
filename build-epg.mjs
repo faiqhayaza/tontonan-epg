@@ -37,13 +37,18 @@ for (const [cid, m] of Object.entries(MATCHES)) {
   bySite.get(m.site).push([cid, m]);
 }
 
-async function fetchBuf(url, timeoutMs = 60_000) {
+async function fetchBuf(url, timeoutMs = 60_000, { maxBytes = Infinity } = {}) {
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), timeoutMs);
   try {
     const r = await fetch(url, { signal: c.signal, headers: { "User-Agent": UA }, redirect: "follow" });
     if (!r.ok) throw fetchError(url, `HTTP ${r.status}`);
-    return Buffer.from(await r.arrayBuffer());
+    const declared = Number(r.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > maxBytes)
+      throw fetchError(url, `content-length ${declared} exceeds cap ${maxBytes}`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > maxBytes) throw fetchError(url, `downloaded ${buf.length} bytes, exceeds cap ${maxBytes}`);
+    return buf;
   } catch (e) {
     // Tag every fetch failure with the URL, so build-report.json can name
     // the failing fetch. (The Nov 2026 epgshare incident was undiagnosable
@@ -62,6 +67,27 @@ function fetchError(url, message) {
   return e;
 }
 
+/* Size caps. The iptvx feed is fetched whole and gunzipped into memory:
+ * its uncompressed XML grew 210 MB (Nov 9) -> 312 MB (Nov 12), so the caps
+ * below refuse absurd growth instead of OOMing the runner. A capped fetch
+ * or gunzip fails the adapter (recorded in the report with its URL) and
+ * the failure gate decides whether the build may proceed. */
+const IPTVX_MAX_GZ_BYTES = 100 * 1024 * 1024; // compressed; ~15-30 MB today
+const IPTVX_MAX_XML_BYTES = 600 * 1024 * 1024; // uncompressed; 312 MB on Nov 12
+const EPGSHARE_MAX_GZ_BYTES = 50 * 1024 * 1024; // per region; US2 is ~7 MB
+const EPGSHARE_MAX_XML_BYTES = 200 * 1024 * 1024;
+const MJH_MAX_XML_BYTES = 20 * 1024 * 1024; // per file; files are KBs to a few MB
+
+/* Gunzip with an output cap; tags errors with the source URL like fetchBuf. */
+function gunzipCapped(gz, maxBytes, url) {
+  try {
+    return zlib.gunzipSync(gz, { maxOutputLength: maxBytes });
+  } catch (e) {
+    if (!e.url) e.url = url;
+    throw e;
+  }
+}
+
 /* Pure XML/time helpers live in lib/epg-utils.mjs (unit-tested). */
 
 const results = {};
@@ -71,8 +97,8 @@ async function adapterIptvx() {
   const rows = bySite.get("epg.iptvx.one") ?? [];
   // iptvx keys programmes by the guides' site_id (e.g. "13-strt"), not xmltv_id.
   const wanted = new Map(rows.map(([cid, m]) => [String(m.site_id), cid]));
-  const gz = await fetchBuf("https://iptvx.one/epg/epg_noarch.xml.gz", 120_000);
-  const xml = zlib.gunzipSync(gz).toString("utf8");
+  const gz = await fetchBuf("https://iptvx.one/epg/epg_noarch.xml.gz", 120_000, { maxBytes: IPTVX_MAX_GZ_BYTES });
+  const xml = gunzipCapped(gz, IPTVX_MAX_XML_BYTES, "https://iptvx.one/epg/epg_noarch.xml.gz").toString("utf8");
   extractXmltv(xml, wanted, results, WIN_START, WIN_END);
   report.iptvx = { channels: rows.length, withData: rows.filter(([cid]) => results[cid]?.length).length, xmlMB: +(xml.length / 1e6).toFixed(1) };
 }
@@ -93,7 +119,7 @@ async function adapterMjh() {
     while (queue.length) {
       const [path, wanted] = queue.shift();
       try {
-        const buf = await fetchBuf(`https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/${path}.xml`, 90_000);
+        const buf = await fetchBuf(`https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/${path}.xml`, 90_000, { maxBytes: MJH_MAX_XML_BYTES });
         extractXmltv(buf.toString("utf8"), wanted, results, WIN_START, WIN_END);
         files++;
       } catch (e) {
@@ -128,7 +154,9 @@ async function adapterMyjcom() {
             const end = jstToMs(it.programEnd);
             if (end <= WIN_START || start >= WIN_END || seen.has(start)) continue;
             seen.add(start);
-            (results[cid] ??= []).push([start, end, String(it.title ?? "").trim()]);
+            const title = String(it.title ?? "").trim();
+            if (!title) continue; // don't publish empty-title programme entries
+            (results[cid] ??= []).push([start, end, title]);
           }
         }
       } catch (e) {
@@ -258,8 +286,8 @@ async function adapterEpgshare() {
     while (dlQueue.length) {
       const [region, wanted] = dlQueue.shift();
       try {
-        const gz = await fetchBuf(`https://epgshare01.online/epgshare01/epg_ripper_${region}.xml.gz`, 180_000);
-        extractXmltv(zlib.gunzipSync(gz).toString("utf8"), wanted, results, WIN_START, WIN_END);
+        const gz = await fetchBuf(`https://epgshare01.online/epgshare01/epg_ripper_${region}.xml.gz`, 180_000, { maxBytes: EPGSHARE_MAX_GZ_BYTES });
+        extractXmltv(gunzipCapped(gz, EPGSHARE_MAX_XML_BYTES, `https://epgshare01.online/epgshare01/epg_ripper_${region}.xml.gz`).toString("utf8"), wanted, results, WIN_START, WIN_END);
         files++;
       } catch (e) {
         console.error(`epgshare ${region}: ${e.message}`);
