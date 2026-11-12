@@ -1,0 +1,4 @@
+node_modules/
+*.log
+matches.json.bak
+.DS_Store

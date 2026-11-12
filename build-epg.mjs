@@ -23,6 +23,7 @@
  */
 import fs from "node:fs";
 import zlib from "node:zlib";
+import { extractXmltv, jstToMs } from "./lib/epg-utils.mjs";
 
 const MATCHES = JSON.parse(fs.readFileSync(new URL("./matches.json", import.meta.url), "utf8"));
 const NOW = Date.now();
@@ -48,51 +49,7 @@ async function fetchBuf(url, timeoutMs = 60_000) {
   }
 }
 
-const unescapeXml = (s) =>
-  s
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16)))
-    .replace(/&amp;/g, "&")
-    .trim();
-
-/* XMLTV timestamp "20261020093000 +0900" (offset optional) -> epoch ms. */
-function xmltvTime(s) {
-  const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/.exec(s);
-  if (!m) return null;
-  const [, y, mo, d, h, mi, se, off] = m;
-  let ms = Date.UTC(+y, +mo - 1, +d, +h, +mi, +se);
-  if (off) {
-    const sign = off[0] === "-" ? -1 : 1;
-    ms -= sign * (+off.slice(1, 3) * 3600_000 + +off.slice(3, 5) * 60_000);
-  }
-  return ms;
-}
-
-/** Extract window-trimmed programmes for `wanted` (Map xmltv_id -> catalogId). */
-function extractXmltv(xml, wanted, out) {
-  const tagRe = /<programme\s([^>]*)>([\s\S]*?)<\/programme>/g;
-  let m;
-  while ((m = tagRe.exec(xml)) !== null) {
-    const attrs = m[1];
-    const chM = /channel="([^"]+)"/.exec(attrs);
-    if (!chM) continue;
-    const cid = wanted.get(chM[1]);
-    if (!cid) continue;
-    const sM = /start="([^"]+)"/.exec(attrs);
-    const eM = /stop="([^"]+)"/.exec(attrs);
-    if (!sM || !eM) continue;
-    const start = xmltvTime(sM[1]);
-    const end = xmltvTime(eM[1]);
-    if (start === null || end === null || end <= WIN_START || start >= WIN_END) continue;
-    const tM = /<title[^>]*>([^<]*)<\/title>/.exec(m[2]);
-    if (!tM) continue;
-    (out[cid] ??= []).push([start, end, unescapeXml(tM[1])]);
-  }
-}
+/* Pure XML/time helpers live in lib/epg-utils.mjs (unit-tested). */
 
 const results = {};
 const report = {};
@@ -103,7 +60,7 @@ async function adapterIptvx() {
   const wanted = new Map(rows.map(([cid, m]) => [String(m.site_id), cid]));
   const gz = await fetchBuf("https://iptvx.one/epg/epg_noarch.xml.gz", 120_000);
   const xml = zlib.gunzipSync(gz).toString("utf8");
-  extractXmltv(xml, wanted, results);
+  extractXmltv(xml, wanted, results, WIN_START, WIN_END);
   report.iptvx = { channels: rows.length, withData: rows.filter(([cid]) => results[cid]?.length).length, xmlMB: +(xml.length / 1e6).toFixed(1) };
 }
 
@@ -123,7 +80,7 @@ async function adapterMjh() {
       const [path, wanted] = queue.shift();
       try {
         const buf = await fetchBuf(`https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/${path}.xml`, 90_000);
-        extractXmltv(buf.toString("utf8"), wanted, results);
+        extractXmltv(buf.toString("utf8"), wanted, results, WIN_START, WIN_END);
         files++;
       } catch (e) {
         console.error(`mjh ${path}: ${e.message}`);
@@ -134,11 +91,7 @@ async function adapterMjh() {
   report.mjh = { channels: rows.length, files, paths: byPath.size, withData: rows.filter(([cid]) => results[cid]?.length).length };
 }
 
-/* myjcom: programStart/programEnd are JST wall-clock "YYYYMMDDHHmmss". */
-function jstToMs(v) {
-  const s = String(v);
-  return Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12), +s.slice(12, 14)) - 9 * 3600_000;
-}
+/* myjcom: programStart/programEnd are JST wall-clock "YYYYMMDDHHmmss" (see jstToMs). */
 
 async function adapterMyjcom() {
   const rows = bySite.get("tvguide.myjcom.jp") ?? [];
@@ -279,7 +232,7 @@ async function adapterEpgshare() {
       const [region, wanted] = dlQueue.shift();
       try {
         const gz = await fetchBuf(`https://epgshare01.online/epgshare01/epg_ripper_${region}.xml.gz`, 180_000);
-        extractXmltv(zlib.gunzipSync(gz).toString("utf8"), wanted, results);
+        extractXmltv(zlib.gunzipSync(gz).toString("utf8"), wanted, results, WIN_START, WIN_END);
         files++;
       } catch (e) {
         console.error(`epgshare ${region}: ${e.message}`);

@@ -1,0 +1,1 @@
+{"description":"Program guide (EPG) data pipeline for Tontonan","engines":{"node":">=20"},"license":"MIT","name":"tontonan-epg","private":true,"scripts":{"build":"node build-epg.mjs","check":"node --check build-epg.mjs && node --check lib/epg-utils.mjs && node --check scripts/regenerate-matches.mjs","test":"node --test"},"type":"module","version":"1.0.0"}
