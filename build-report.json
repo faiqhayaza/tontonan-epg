@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1794483221265,
+  "generatedAt": 1794487169606,
   "adapters": {
     "iptvx": {
       "channels": 343,
@@ -17,8 +17,12 @@
       "withData": 5
     },
     "epgshare": {
-      "error": "HTTP 403"
+      "channels": 1036,
+      "files": 57,
+      "regions": 57,
+      "withData": 893,
+      "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     }
   },
-  "channelsWithData": 1012
+  "channelsWithData": 1905
 }
