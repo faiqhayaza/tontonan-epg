@@ -42,11 +42,24 @@ async function fetchBuf(url, timeoutMs = 60_000) {
   const t = setTimeout(() => c.abort(), timeoutMs);
   try {
     const r = await fetch(url, { signal: c.signal, headers: { "User-Agent": UA }, redirect: "follow" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) throw fetchError(url, `HTTP ${r.status}`);
     return Buffer.from(await r.arrayBuffer());
+  } catch (e) {
+    // Tag every fetch failure with the URL, so build-report.json can name
+    // the failing fetch. (The Nov 2026 epgshare incident was undiagnosable
+    // for 2 days precisely because the report recorded only "HTTP 403".)
+    if (!e.url) e.url = url;
+    throw e;
   } finally {
     clearTimeout(t);
   }
+}
+
+/* Error carrying the URL that failed, for the build report. */
+function fetchError(url, message) {
+  const e = new Error(`${message} (${url})`);
+  e.url = url;
+  return e;
 }
 
 /* Pure XML/time helpers live in lib/epg-utils.mjs (unit-tested). */
@@ -74,6 +87,7 @@ async function adapterMjh() {
     byPath.get(path).set(key ?? m.xmltv_id, cid);
   }
   let files = 0;
+  const failedPaths = [];
   const queue = [...byPath.entries()];
   async function worker() {
     while (queue.length) {
@@ -84,17 +98,19 @@ async function adapterMjh() {
         files++;
       } catch (e) {
         console.error(`mjh ${path}: ${e.message}`);
+        failedPaths.push({ path, error: e.message, url: e.url ?? null });
       }
     }
   }
   await Promise.all(Array.from({ length: 6 }, worker));
-  report.mjh = { channels: rows.length, files, paths: byPath.size, withData: rows.filter(([cid]) => results[cid]?.length).length };
+  report.mjh = { channels: rows.length, files, paths: byPath.size, withData: rows.filter(([cid]) => results[cid]?.length).length, ...(failedPaths.length ? { failedPaths } : {}) };
 }
 
 /* myjcom: programStart/programEnd are JST wall-clock "YYYYMMDDHHmmss" (see jstToMs). */
 
 async function adapterMyjcom() {
   const rows = bySite.get("tvguide.myjcom.jp") ?? [];
+  const failed = [];
   const jstNow = new Date(NOW + 9 * 3600_000);
   const days = [0, 1].map((k) => {
     const d = new Date(jstNow.getTime() + k * 86400_000);
@@ -117,10 +133,11 @@ async function adapterMyjcom() {
         }
       } catch (e) {
         console.error(`myjcom ${cid} ${day}: ${e.message}`);
+        failed.push({ channel: cid, day, error: e.message, url: e.url ?? null });
       }
     }
   }
-  report.myjcom = { channels: rows.length, withData: rows.filter(([cid]) => results[cid]?.length).length };
+  report.myjcom = { channels: rows.length, withData: rows.filter(([cid]) => results[cid]?.length).length, ...(failed.length ? { failed } : {}) };
 }
 
 /* ------------------------------------------------------------------ *
@@ -177,6 +194,7 @@ async function adapterEpgshare() {
 
   // Fetch all region listings first (small); collect esId -> regions.
   const esRegions = new Map();
+  const failedLists = [];
   const listQueue = [...EPGSHARE_REGIONS];
   async function listWorker() {
     while (listQueue.length) {
@@ -191,6 +209,7 @@ async function adapterEpgshare() {
         }
       } catch (e) {
         console.error(`epgshare list ${region}: ${e.message}`);
+        failedLists.push({ region, error: e.message, url: e.url ?? null });
       }
     }
   }
@@ -232,6 +251,7 @@ async function adapterEpgshare() {
 
   let files = 0;
   let matched = 0;
+  const failedRegions = [];
   for (const wanted of wantedByRegion.values()) matched += wanted.size;
   const dlQueue = [...wantedByRegion.entries()];
   async function dlWorker() {
@@ -243,6 +263,7 @@ async function adapterEpgshare() {
         files++;
       } catch (e) {
         console.error(`epgshare ${region}: ${e.message}`);
+        failedRegions.push({ region, error: e.message, url: e.url ?? null });
       }
     }
   }
@@ -252,6 +273,8 @@ async function adapterEpgshare() {
     files,
     regions: wantedByRegion.size,
     withData: [...claimed].filter((cid) => results[cid]?.length).length,
+    ...(failedLists.length ? { failedLists } : {}),
+    ...(failedRegions.length ? { failedRegions } : {}),
     // The catalog's own timestamp: makes a stale mirror visible in the
     // report (the A1 file must track the live catalog's generatedAt).
     catalogGeneratedAt: catalog.generatedAt ?? null,
@@ -264,13 +287,46 @@ for (const [name, fn] of [["iptvx", adapterIptvx], ["mjh", adapterMjh], ["myjcom
     console.log(name, JSON.stringify(report[name]));
   } catch (e) {
     console.error(`${name} adapter failed: ${e.message}`);
-    report[name] = { error: e.message };
+    report[name] = { error: e.message, url: e.url ?? null, at: new Date(NOW).toISOString() };
   }
 }
 
 for (const list of Object.values(results)) list.sort((a, b) => a[0] - b[0]);
-const out = { v: 1, generatedAt: NOW, channels: results };
-fs.writeFileSync(new URL("./epg.json", import.meta.url), JSON.stringify(out));
 const total = Object.keys(results).length;
-console.log(`epg.json written: ${total} channels with data, ${(JSON.stringify(out).length / 1024).toFixed(0)} KiB`);
-fs.writeFileSync(new URL("./build-report.json", import.meta.url), JSON.stringify({ generatedAt: NOW, adapters: report, channelsWithData: total }, null, 2));
+const out = { v: 1, generatedAt: NOW, channels: results };
+
+/* Failure gate: a degraded build must never overwrite the last good
+ * epg.json. The previous committed build-report.json is the baseline.
+ * The report is ALWAYS written (so a failure is visible in the repo);
+ * epg.json is written only when the gate passes, and the process exits
+ * non-zero so the workflow fails and GitHub notifies. Rules:
+ *   - zero channels with data -> fail
+ *   - channelsWithData down >25% vs the previous build -> fail
+ * (The Nov 2026 epgshare outage halved output to ~1,000 from ~1,900
+ * for 2 days while the workflow stayed green and kept committing the
+ * degraded file. Either rule would have stopped it at the first build.) */
+let prevTotal = null;
+try {
+  const prev = JSON.parse(fs.readFileSync(new URL("./build-report.json", import.meta.url), "utf8"));
+  if (Number.isFinite(prev.channelsWithData)) prevTotal = prev.channelsWithData;
+} catch {
+  // First build, or a missing/corrupt report: no baseline, but the
+  // absolute floor (total === 0) still applies.
+}
+const gateReasons = [];
+if (total === 0) gateReasons.push("no channels with data");
+if (prevTotal !== null && total < prevTotal * 0.75)
+  gateReasons.push(`channelsWithData fell ${prevTotal} -> ${total} (more than 25% down vs previous build)`);
+const gate = { prevChannelsWithData: prevTotal, pass: gateReasons.length === 0, ...(gateReasons.length ? { reasons: gateReasons } : {}) };
+
+fs.writeFileSync(
+  new URL("./build-report.json", import.meta.url),
+  JSON.stringify({ generatedAt: NOW, adapters: report, channelsWithData: total, gate }, null, 2),
+);
+if (!gate.pass) {
+  console.error(`GATE FAILED (${gateReasons.join("; ")}): epg.json NOT overwritten, keeping last good build`);
+  process.exitCode = 1;
+} else {
+  fs.writeFileSync(new URL("./epg.json", import.meta.url), JSON.stringify(out));
+  console.log(`epg.json written: ${total} channels with data, ${(JSON.stringify(out).length / 1024).toFixed(0)} KiB`);
+}
