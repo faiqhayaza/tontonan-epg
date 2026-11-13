@@ -4,7 +4,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { extractXmltv, jstToMs, unescapeXml, xmltvTime } from "../lib/epg-utils.mjs";
+import { extractXmltv, jstToMs, normalizeName, parseXmltvChannels, unescapeXml, xmltvTime } from "../lib/epg-utils.mjs";
 
 describe("xmltvTime", () => {
   it("applies a positive offset (JST wall clock -> UTC)", () => {
@@ -47,6 +47,42 @@ describe("unescapeXml", () => {
 
   it("decodes &amp; last, so double-encoded entities stay single-encoded", () => {
     assert.equal(unescapeXml("&amp;lt;"), "&lt;");
+  });
+});
+
+describe("normalizeName", () => {
+  it("strips quality suffixes, parentheticals and punctuation", () => {
+    assert.equal(normalizeName("Sky Arts HD"), "skyarts");
+    assert.equal(normalizeName("BBC One (1080p)"), "bbcone");
+    assert.equal(normalizeName("QUEST+1"), "quest");
+    assert.equal(normalizeName("TV9 KANNADA"), "tv9kannada");
+  });
+
+  it("keeps non-Latin letters, so similar CJK names stay distinct", () => {
+    assert.notEqual(normalizeName("NHK東京総合"), normalizeName("NHK東京教育"));
+    assert.equal(normalizeName("日本テレビ"), "日本テレビ");
+  });
+});
+
+describe("parseXmltvChannels", () => {
+  it("maps numeric epg.pw-style ids to display-names", () => {
+    const xml = `<tv>
+      <channel id="9121"><display-name lang="GB">Kanshi TV</display-name><icon src="" /></channel>
+      <channel id="9122"><display-name lang="GB">SkyPremiereHD</display-name></channel>
+    </tv>`;
+    assert.deepEqual(
+      [...parseXmltvChannels(xml)],
+      [["9121", "Kanshi TV"], ["9122", "SkyPremiereHD"]],
+    );
+  });
+
+  it("skips channels without a display-name and keeps the first of duplicates", () => {
+    const xml = `<tv>
+      <channel id="1"><icon src="" /></channel>
+      <channel id="2"><display-name>A</display-name></channel>
+      <channel id="2"><display-name>B</display-name></channel>
+    </tv>`;
+    assert.deepEqual([...parseXmltvChannels(xml)], [["2", "A"]]);
   });
 });
 

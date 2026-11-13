@@ -20,10 +20,17 @@
  *   myjcom   tvguide.myjcom.jp    JSON API (JP channels incl. TBS, Fuji TV)
  *   epgshare epgshare01.online    per-region XMLTV files; generic adapter
  *                                 keyed by catalog tvg-id (see adapterEpgshare)
+ *   iptvorg  iptv-org/epg grabber guide.xml produced by the workflow's
+ *                                 grab step (see scripts/iptvorg-channels.mjs);
+ *                                 programmes are keyed by catalog base id
+ *   epgpw    epg.pw               per-country XMLTV files, matched to the
+ *                                 catalog by display-name (numeric ids)
+ *   epgbest  epg.best             personal XMLTV URL from EPG_BEST_URL
+ *                                 (secret); skipped when unset
  */
 import fs from "node:fs";
 import zlib from "node:zlib";
-import { extractXmltv, jstToMs } from "./lib/epg-utils.mjs";
+import { extractXmltv, jstToMs, normalizeName, parseXmltvChannels } from "./lib/epg-utils.mjs";
 
 const MATCHES = JSON.parse(fs.readFileSync(new URL("./matches.json", import.meta.url), "utf8"));
 const NOW = Date.now();
@@ -77,6 +84,11 @@ const IPTVX_MAX_XML_BYTES = 600 * 1024 * 1024; // uncompressed; 312 MB on Nov 12
 const EPGSHARE_MAX_GZ_BYTES = 50 * 1024 * 1024; // per region; US2 is ~7 MB
 const EPGSHARE_MAX_XML_BYTES = 200 * 1024 * 1024;
 const MJH_MAX_XML_BYTES = 20 * 1024 * 1024; // per file; files are KBs to a few MB
+const IPTVORG_MAX_XML_BYTES = 500 * 1024 * 1024; // grabber guide.xml; ~2,500 ch x 1 day
+const EPW_MAX_GZ_BYTES = 50 * 1024 * 1024; // per country; US is ~21 MB gz
+const EPW_MAX_XML_BYTES = 300 * 1024 * 1024; // per country; US unzips to ~164 MB
+const EPGBEST_MAX_BYTES = 100 * 1024 * 1024; // personal feed, gz or plain
+const EPGBEST_MAX_XML_BYTES = 300 * 1024 * 1024;
 
 /* Gunzip with an output cap; tags errors with the source URL like fetchBuf. */
 function gunzipCapped(gz, maxBytes, url) {
@@ -309,7 +321,175 @@ async function adapterEpgshare() {
   };
 }
 
-for (const [name, fn] of [["iptvx", adapterIptvx], ["mjh", adapterMjh], ["myjcom", adapterMyjcom], ["epgshare", adapterEpgshare]]) {
+/* ------------------------------------------------------------------ *
+ * iptvorg: the iptv-org/epg grabber's output, produced by the workflow.
+ *
+ * The workflow clones iptv-org/epg, runs scripts/iptvorg-channels.mjs
+ * (which picks uncovered catalog channels the grabber's sites can serve
+ * and writes iptvorg.channels.xml + iptvorg.channels.json), then runs
+ * the grabber with --days=1 to produce iptvorg-guide.xml. The generator
+ * already wrote each channel's xmltv_id as its CATALOG base id, so the
+ * guide's programmes are keyed by catalog id; this adapter only has to
+ * resolve each base id to one catalog feed id (first feed without data
+ * yet, like epgshare) and extract.
+ * If the grab step did not run or produced nothing, the adapter skips
+ * quietly: the grabber is best-effort, the other adapters still build.
+ * ------------------------------------------------------------------ */
+async function adapterIptvorg() {
+  let map;
+  try {
+    map = JSON.parse(fs.readFileSync(new URL("./iptvorg.channels.json", import.meta.url), "utf8"));
+  } catch {
+    report.iptvorg = { skipped: "iptvorg.channels.json not present (grab step did not run)" };
+    return;
+  }
+  let guide;
+  try {
+    guide = fs.readFileSync(new URL("./iptvorg-guide.xml", import.meta.url), "utf8");
+  } catch {
+    report.iptvorg = { skipped: "iptvorg-guide.xml not present (grab produced nothing)" };
+    return;
+  }
+  if (guide.length > IPTVORG_MAX_XML_BYTES) {
+    report.iptvorg = { error: `guide.xml ${guide.length} bytes exceeds cap ${IPTVORG_MAX_XML_BYTES}` };
+    return;
+  }
+  const wanted = new Map();
+  for (const [xmltvId, catalogId] of Object.entries(map.channels ?? {})) {
+    if (results[catalogId]?.length) continue; // earlier adapter already filled it
+    wanted.set(xmltvId, catalogId);
+  }
+  extractXmltv(guide, wanted, results, WIN_START, WIN_END);
+  report.iptvorg = {
+    channels: wanted.size,
+    withData: [...wanted.values()].filter((cid) => results[cid]?.length).length,
+    guideKB: +(guide.length / 1024).toFixed(0),
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * epgpw: epg.pw per-country XMLTV files (https://epg.pw/xmltv.html).
+ *
+ * Free, no account, auto-updated daily. 21 country files
+ * (epg_<CC>.xml.gz); the US file is the big one (~21 MB gz, ~164 MB
+ * XML, ~5,500 channels). Channel ids are opaque NUMBERS, so matching
+ * is by display-name: the file's <channel> names, normalized with
+ * normalizeName(), matched against catalog channel names in the same
+ * country — accepted only when exactly one uncovered catalog channel
+ * in that country matches. Abbreviated names ("SkySp Golf HD" vs
+ * "Sky Sports Golf HD") do not match; that is accepted loss — a wrong
+ * guide is worse than no guide. Files are processed sequentially
+ * (the US file alone is ~330 MB as a JS string) and each is
+ * failure-isolated.
+ * ------------------------------------------------------------------ */
+const EPW_COUNTRIES = (
+  "AU BR CA CN DE FR GB HK ID IN JP MY NZ PH RU SG TW US VN ZA"
+).split(" ");
+
+async function adapterEpgpw() {
+  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", 60_000);
+  const catalog = JSON.parse(catBuf.toString("utf8"));
+  // Per-country name index over catalog channels (all of them; the
+  // already-covered ones are filtered out at match time so they cannot
+  // steal a unique match from an uncovered channel).
+  const byCountryName = new Map(); // cc -> normName -> [catalogId]
+  for (const ch of catalog.channels ?? []) {
+    const cc = (ch.countryCode || "").toUpperCase();
+    if (!cc) continue;
+    const n = normalizeName(ch.name ?? "");
+    if (n.length < 4) continue;
+    if (!byCountryName.has(cc)) byCountryName.set(cc, new Map());
+    const m = byCountryName.get(cc);
+    if (!m.has(n)) m.set(n, []);
+    m.get(n).push(ch.id);
+  }
+
+  let files = 0;
+  let matchedCids = new Set();
+  const failed = [];
+  for (const cc of EPW_COUNTRIES) {
+    const url = `https://epg.pw/xmltv/epg_${cc}.xml.gz`;
+    try {
+      const gz = await fetchBuf(url, 180_000, { maxBytes: EPW_MAX_GZ_BYTES });
+      const xml = gunzipCapped(gz, EPW_MAX_XML_BYTES, url).toString("utf8");
+      const guideChannels = parseXmltvChannels(xml);
+      const names = byCountryName.get(cc) ?? new Map();
+      const wanted = new Map(); // numeric epg.pw id -> catalogId
+      for (const [numId, name] of guideChannels) {
+        const cands = (names.get(normalizeName(name)) ?? []).filter((cid) => !results[cid]?.length);
+        if (cands.length === 1) wanted.set(numId, cands[0]);
+      }
+      extractXmltv(xml, wanted, results, WIN_START, WIN_END);
+      for (const cid of wanted.values()) matchedCids.add(cid);
+      files++;
+    } catch (e) {
+      console.error(`epgpw ${cc}: ${e.message}`);
+      failed.push({ country: cc, error: e.message, url: e.url ?? null });
+    }
+  }
+  report.epgpw = {
+    channels: matchedCids.size,
+    files,
+    withData: [...matchedCids].filter((cid) => results[cid]?.length).length,
+    ...(failed.length ? { failed } : {}),
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * epgbest: epg.best personal XMLTV feed.
+ *
+ * epg.best has NO public unauthenticated feed: the XMLTV URL is
+ * personal to a (free) account, issued after registration on
+ * https://epg.best/. So this adapter reads its URL from the
+ * EPG_BEST_URL environment variable (a GitHub Actions secret in the
+ * workflow; unset locally) and SKIPS cleanly when it is not set — the
+ * build must stay green without an account. When set, the feed is
+ * fetched (gzipped or plain XMLTV) and matched by exact / case-
+ * insensitive channel id, like epgshare's first two match layers.
+ * No account is ever created by this repo; if Faiq wants epg.best
+ * data, he pastes his personal feed URL into the repo secret.
+ * ------------------------------------------------------------------ */
+async function adapterEpgbest() {
+  const url = process.env.EPG_BEST_URL;
+  if (!url) {
+    report.epgbest = { skipped: "EPG_BEST_URL not set (see README)" };
+    return;
+  }
+  const buf = await fetchBuf(url, 180_000, { maxBytes: EPGBEST_MAX_BYTES });
+  const xml =
+    buf[0] === 0x1f && buf[1] === 0x8b
+      ? gunzipCapped(buf, EPGBEST_MAX_XML_BYTES, url).toString("utf8")
+      : buf.toString("utf8");
+  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", 60_000);
+  const catalog = JSON.parse(catBuf.toString("utf8"));
+  const baseOf = (id) => String(id).split("@")[0];
+  const byBase = new Map();
+  const byLower = new Map();
+  for (const ch of catalog.channels ?? []) {
+    const b = baseOf(ch.id);
+    if (!byBase.has(b)) byBase.set(b, []);
+    byBase.get(b).push(ch.id);
+    byLower.set(b.toLowerCase(), b);
+  }
+  const guideChannels = parseXmltvChannels(xml);
+  const wanted = new Map();
+  for (const gid of guideChannels.keys()) {
+    const base = byBase.has(gid) ? gid : byBase.has(baseOf(gid)) ? baseOf(gid) : byLower.get(gid.toLowerCase()) ?? byLower.get(baseOf(gid).toLowerCase());
+    if (!base) continue;
+    for (const cid of byBase.get(base)) {
+      if (results[cid]?.length) continue;
+      wanted.set(gid, cid);
+      break;
+    }
+  }
+  extractXmltv(xml, wanted, results, WIN_START, WIN_END);
+  report.epgbest = {
+    channels: wanted.size,
+    withData: [...wanted.values()].filter((cid) => results[cid]?.length).length,
+  };
+}
+
+for (const [name, fn] of [["iptvx", adapterIptvx], ["mjh", adapterMjh], ["myjcom", adapterMyjcom], ["epgshare", adapterEpgshare], ["iptvorg", adapterIptvorg], ["epgpw", adapterEpgpw], ["epgbest", adapterEpgbest]]) {
   try {
     await fn();
     console.log(name, JSON.stringify(report[name]));

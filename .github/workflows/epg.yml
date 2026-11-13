@@ -15,18 +15,44 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       # SHA-pinned actions (actions/checkout@v4, actions/setup-node@v4).
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
+      # iptv-org/epg grabber (best-effort input to the build; the failure
+      # gate in build-epg.mjs still guards the output, so these steps
+      # must never fail the job — a missing guide just means the iptvorg
+      # adapter skips for one build). Sparse checkout: the grab only
+      # needs the site parsers + the grab command + package files.
+      - name: Clone iptv-org/epg grabber
+        continue-on-error: true
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/iptv-org/epg.git iptvorg
+          cd iptvorg
+          git sparse-checkout set --no-cone 'sites/*' 'scripts/*' '/package.json' '/package-lock.json'
+          npm ci --no-audit --no-fund
+      - name: Generate iptv-org channel list
+        continue-on-error: true
+        run: node scripts/iptvorg-channels.mjs --max-channels 1500
+      - name: Grab iptv-org guides
+        continue-on-error: true
+        run: |
+          if [ -f iptvorg.channels.xml ] && [ -d iptvorg ]; then
+            cd iptvorg
+            timeout 1500 npm run grab -- --channels=../iptvorg.channels.xml --output=../iptvorg-guide.xml --days=1 --maxConnections=10 || echo "grab failed - continuing without iptv-org data"
+          else
+            echo "no channel list or grabber checkout - skipping grab"
+          fi
       - name: Build epg.json
         # Exits non-zero when the failure gate trips (see build-epg.mjs):
         # a degraded build must not overwrite the last good epg.json.
         env:
           NODE_OPTIONS: --max-old-space-size=8192
+          # epg.best personal feed URL (repo secret; unset = adapter skips).
+          EPG_BEST_URL: ${{ secrets.EPG_BEST_URL }}
         run: node build-epg.mjs
       - name: Commit epg.json if changed
         if: success()
@@ -42,12 +68,16 @@ jobs:
           fi
       - name: Commit build-report.json if changed
         # Always runs, so a failed/gated build still leaves its report
-        # (with the failing URL and gate reason) in the repo.
+        # (with the failing URL and gate reason) in the repo. The
+        # iptv-org channel list + map ride along: they are the audit
+        # trail for what the grabber was asked to fetch.
         if: always()
         run: |
           git config user.name "tontonan-epg"
           git config user.email "actions@users.noreply.github.com"
           git add build-report.json
+          # Channel list files only exist when the grabber steps ran.
+          git add iptvorg.channels.xml iptvorg.channels.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "no changes"
           else
