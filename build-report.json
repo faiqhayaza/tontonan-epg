@@ -1,9 +1,9 @@
 {
-  "generatedAt": 1794534246979,
+  "generatedAt": 1794535226444,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 333,
+      "withData": 332,
       "xmlMB": 327.2
     },
     "mjh": {
@@ -41,22 +41,22 @@
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1492,
-      "withData": 882,
-      "guideKB": 11522
+      "channels": 1421,
+      "withData": 781,
+      "guideKB": 22663
     },
     "epgpw": {
-      "channels": 346,
+      "channels": 425,
       "files": 20,
-      "withData": 339
+      "withData": 411
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3118,
+  "channelsWithData": 3088,
   "gate": {
-    "prevChannelsWithData": 1877,
+    "prevChannelsWithData": 3118,
     "pass": true
   }
 }
