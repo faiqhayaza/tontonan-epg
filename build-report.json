@@ -1,10 +1,10 @@
 {
-  "generatedAt": 1794680610589,
+  "generatedAt": 1794696044962,
   "adapters": {
     "iptvx": {
       "channels": 343,
       "withData": 334,
-      "xmlMB": 351.2
+      "xmlMB": 351.3
     },
     "mjh": {
       "channels": 787,
@@ -19,12 +19,12 @@
         },
         {
           "path": "Roku/all",
-          "error": "downloaded 37710123 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "error": "downloaded 37668774 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
         },
         {
           "path": "SkyGo/epg",
-          "error": "downloaded 67980599 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml)",
+          "error": "downloaded 69794246 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml"
         }
       ]
@@ -37,26 +37,26 @@
       "channels": 1037,
       "files": 59,
       "regions": 59,
-      "withData": 907,
+      "withData": 911,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1390,
-      "withData": 784,
-      "guideKB": 10177
+      "channels": 1415,
+      "withData": 721,
+      "guideKB": 22488
     },
     "epgpw": {
-      "channels": 437,
+      "channels": 423,
       "files": 20,
-      "withData": 433
+      "withData": 420
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3110,
+  "channelsWithData": 3038,
   "gate": {
-    "prevChannelsWithData": 3089,
+    "prevChannelsWithData": 3110,
     "pass": true
   }
 }
