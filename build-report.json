@@ -1,16 +1,16 @@
 {
-  "generatedAt": 1794599751657,
+  "generatedAt": 1794619995148,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 334,
+      "withData": 327,
       "xmlMB": 341.1
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 625,
+      "withData": 644,
       "failedPaths": [
         {
           "path": "Flash/epg",
@@ -19,12 +19,12 @@
         },
         {
           "path": "Roku/all",
-          "error": "downloaded 37727377 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "error": "downloaded 37739108 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
         },
         {
           "path": "SkyGo/epg",
-          "error": "downloaded 68840283 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml)",
+          "error": "downloaded 69519612 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml"
         }
       ]
@@ -34,29 +34,29 @@
       "withData": 5
     },
     "epgshare": {
-      "channels": 1039,
-      "files": 58,
-      "regions": 58,
-      "withData": 907,
+      "channels": 1037,
+      "files": 59,
+      "regions": 59,
+      "withData": 920,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1413,
-      "withData": 763,
-      "guideKB": 22913
+      "channels": 1383,
+      "withData": 793,
+      "guideKB": 10039
     },
     "epgpw": {
       "channels": 428,
       "files": 20,
-      "withData": 413
+      "withData": 425
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3047,
+  "channelsWithData": 3114,
   "gate": {
-    "prevChannelsWithData": 3094,
+    "prevChannelsWithData": 3047,
     "pass": true
   }
 }
