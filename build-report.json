@@ -1,9 +1,9 @@
 {
-  "generatedAt": 1794696044962,
+  "generatedAt": 1794725692040,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 334,
+      "withData": 331,
       "xmlMB": 351.3
     },
     "mjh": {
@@ -19,7 +19,7 @@
         },
         {
           "path": "Roku/all",
-          "error": "downloaded 37668774 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "error": "downloaded 37681260 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
         },
         {
@@ -37,26 +37,26 @@
       "channels": 1037,
       "files": 59,
       "regions": 59,
-      "withData": 911,
+      "withData": 920,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1415,
-      "withData": 721,
-      "guideKB": 22488
+      "channels": 1393,
+      "withData": 782,
+      "guideKB": 9892
     },
     "epgpw": {
-      "channels": 423,
+      "channels": 440,
       "files": 20,
-      "withData": 420
+      "withData": 435
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3038,
+  "channelsWithData": 3120,
   "gate": {
-    "prevChannelsWithData": 3110,
+    "prevChannelsWithData": 3038,
     "pass": true
   }
 }
