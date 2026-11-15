@@ -1,26 +1,26 @@
 {
-  "generatedAt": 1794760183650,
+  "generatedAt": 1794783850609,
   "adapters": {
     "iptvx": {
       "channels": 343,
       "withData": 334,
-      "xmlMB": 369.3
+      "xmlMB": 368.3
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 604,
+      "withData": 647,
       "failedPaths": [
+        {
+          "path": "Roku/all",
+          "error": "downloaded 37462455 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
+        },
         {
           "path": "Flash/epg",
           "error": "HTTP 404 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml"
-        },
-        {
-          "path": "Roku/all",
-          "error": "downloaded 37589711 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
-          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
         },
         {
           "path": "SkyGo/epg",
@@ -34,29 +34,29 @@
       "withData": 5
     },
     "epgshare": {
-      "channels": 1040,
+      "channels": 1037,
       "files": 59,
       "regions": 59,
-      "withData": 926,
+      "withData": 914,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1417,
-      "withData": 768,
-      "guideKB": 22826
+      "channels": 1390,
+      "withData": 704,
+      "guideKB": 9200
     },
     "epgpw": {
       "channels": 431,
       "files": 20,
-      "withData": 428
+      "withData": 426
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3065,
+  "channelsWithData": 3030,
   "gate": {
-    "prevChannelsWithData": 3120,
+    "prevChannelsWithData": 3065,
     "pass": true
   }
 }
