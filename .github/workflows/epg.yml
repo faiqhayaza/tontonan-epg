@@ -47,6 +47,7 @@ jobs:
             echo "no channel list or grabber checkout - skipping grab"
           fi
       - name: Build epg.json
+        id: build
         # Exits non-zero when the failure gate trips (see build-epg.mjs):
         # a degraded build must not overwrite the last good epg.json.
         env:
@@ -71,6 +72,11 @@ jobs:
         # (with the failing URL and gate reason) in the repo. The
         # iptv-org channel list + map ride along: they are the audit
         # trail for what the grabber was asked to fetch.
+        # The commit message names the build outcome: a plain "epg: build
+        # report" when the build passed, "(failed build)" only when the
+        # Build step actually failed — previously the message always said
+        # "(failed build)", so every scheduled run looked like a failure
+        # in the history even when the gate passed.
         if: always()
         run: |
           git config user.name "tontonan-epg"
@@ -81,6 +87,10 @@ jobs:
           if git diff --cached --quiet; then
             echo "no changes"
           else
-            git commit -m "epg: build report (failed build)"
+            if [ "${{ steps.build.outcome }}" = "success" ]; then
+              git commit -m "epg: build report"
+            else
+              git commit -m "epg: build report (failed build)"
+            fi
             git push
           fi
