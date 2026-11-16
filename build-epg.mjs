@@ -164,7 +164,12 @@ async function adapterMyjcom() {
           for (const it of items) {
             const start = jstToMs(it.programStart);
             const end = jstToMs(it.programEnd);
-            if (end <= WIN_START || start >= WIN_END || seen.has(start)) continue;
+            // jstToMs yields NaN for a malformed programStart/programEnd;
+            // NaN passes every comparison, so without the finite check a
+            // bad upstream value would land in epg.json as [null, null,
+            // title]. Zero-length/inverted entries are skipped like in
+            // extractXmltv (same upstream placeholder slots).
+            if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || end <= WIN_START || start >= WIN_END || seen.has(start)) continue;
             seen.add(start);
             const title = String(it.title ?? "").trim();
             if (!title) continue; // don't publish empty-title programme entries
@@ -370,7 +375,7 @@ async function adapterIptvorg() {
 /* ------------------------------------------------------------------ *
  * epgpw: epg.pw per-country XMLTV files (https://epg.pw/xmltv.html).
  *
- * Free, no account, auto-updated daily. 21 country files
+ * Free, no account, auto-updated daily. 20 country files
  * (epg_<CC>.xml.gz); the US file is the big one (~21 MB gz, ~164 MB
  * XML, ~5,500 channels). Channel ids are opaque NUMBERS, so matching
  * is by display-name: the file's <channel> names, normalized with

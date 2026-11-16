@@ -36,6 +36,12 @@ describe("jstToMs", () => {
   it("accepts a numeric-looking value", () => {
     assert.equal(jstToMs(20261112093000), Date.UTC(2026, 10, 12, 0, 30, 0));
   });
+
+  it("returns NaN for malformed input", () => {
+    assert.ok(Number.isNaN(jstToMs("garbage")));
+    assert.ok(Number.isNaN(jstToMs("2026")));
+    assert.ok(Number.isNaN(jstToMs("2026111209300")));
+  });
 });
 
 describe("unescapeXml", () => {
@@ -47,6 +53,13 @@ describe("unescapeXml", () => {
 
   it("decodes &amp; last, so double-encoded entities stay single-encoded", () => {
     assert.equal(unescapeXml("&amp;lt;"), "&lt;");
+  });
+
+  it("leaves out-of-range numeric entities literal instead of throwing", () => {
+    // fromCodePoint throws above 0x10FFFF; one such title used to abort
+    // the whole adapter's extraction run.
+    assert.equal(unescapeXml("A &#999999999; B"), "A &#999999999; B");
+    assert.equal(unescapeXml("A &#x110000; B"), "A &#x110000; B");
   });
 });
 
@@ -83,6 +96,13 @@ describe("parseXmltvChannels", () => {
       <channel id="2"><display-name>B</display-name></channel>
     </tv>`;
     assert.deepEqual([...parseXmltvChannels(xml)], [["2", "A"]]);
+  });
+
+  it("finds channels whose id is not the first attribute", () => {
+    const xml = `<tv>
+      <channel lang="GB" id="99"><display-name>Late Id</display-name></channel>
+    </tv>`;
+    assert.deepEqual([...parseXmltvChannels(xml)], [["99", "Late Id"]]);
   });
 });
 
@@ -130,5 +150,26 @@ describe("extractXmltv", () => {
     const out = {};
     extractXmltv(bad, new Map([["X", "c"]]), out, WIN_START, WIN_END);
     assert.deepEqual(out, {});
+  });
+
+  it("skips zero-length and inverted programmes", () => {
+    // Upstream feeds publish start == stop placeholder slots (51 in the
+    // 2026-11-16 build's epg.json); a zero-length entry is not a
+    // programme the client can show as now/next.
+    const xml = `<tv>
+      <programme start="20261112010000 +0000" stop="20261112010000 +0000" channel="X"><title>Zero</title></programme>
+      <programme start="20261112020000 +0000" stop="20261112010000 +0000" channel="X"><title>Inverted</title></programme>
+      <programme start="20261112010000 +0000" stop="20261112020000 +0000" channel="X"><title>Good</title></programme>
+    </tv>`;
+    const out = {};
+    extractXmltv(xml, new Map([["X", "c"]]), out, WIN_START, WIN_END);
+    assert.deepEqual(out["c"].map((p) => p[2]), ["Good"]);
+  });
+
+  it("does not abort on an out-of-range entity in a title", () => {
+    const xml = `<tv><programme start="20261112010000 +0000" stop="20261112020000 +0000" channel="X"><title>A &#999999999; B</title></programme></tv>`;
+    const out = {};
+    extractXmltv(xml, new Map([["X", "c"]]), out, WIN_START, WIN_END);
+    assert.equal(out["c"].length, 1);
   });
 });

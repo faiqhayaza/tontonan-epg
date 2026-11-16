@@ -30,7 +30,7 @@ Sources (guide availability data: [iptv-org](https://github.com/iptv-org/databas
   adapter excluded; capped at 1,500 channels per build), runs the grab
   for one day, and merges the resulting `iptvorg-guide.xml`. Best
   effort: a grab failure only skips that adapter for one build.
-- `epg.pw` per-country XMLTV files (21 countries, daily) — matched to
+- `epg.pw` per-country XMLTV files (20 countries, daily) — matched to
   the catalog by display-name, since its channel ids are opaque numbers;
   only unique in-country name matches are accepted
 - `epg.best` personal XMLTV feed — read from the `EPG_BEST_URL`
@@ -80,9 +80,13 @@ incident is diagnosable from the report alone). Per-file failures are
 also printed to the workflow log (`console.error`). The failure gate
 above decides whether a degraded build may overwrite `epg.json`.
 
-Known smaller gap: the mjh path `Flash/epg` 404s upstream, so the 9
-channels mapped to it (CNN, MSNBC, NBC News NOW, …) have no guide data
-until matthuisman's repo restores it or the entries are remapped.
+Known smaller gaps (mjh, verified 2026-11-16): three `i.mjh.nz` paths fail
+every build. `Flash/epg` 404s upstream, so the 9 channels mapped to it
+(CNN, MSNBC, NBC News NOW, …) have no guide data until matthuisman's repo
+restores it or the entries are remapped. `Roku/all` (~37 MB) and
+`SkyGo/epg` (~69 MB) exceed the 20 MB per-file cap, so their 38 channels
+have no guide data; the cap is Faiq's call, so this stays as documented
+loss rather than a fix.
 
 ## matches.json
 
@@ -122,7 +126,7 @@ Per-build adapter stats, committed alongside `epg.json`:
                 "myjcom":  { "channels": 5, "withData": 5 },
                 "epgshare":{ "channels": 1031, "files": 58, "regions": 58, "withData": 916 },
                 "iptvorg": { "channels": 1500, "guideKB": 42000, "withData": 1100 },
-                "epgpw":   { "channels": 420, "files": 21, "withData": 380 },
+                "epgpw":   { "channels": 420, "files": 20, "withData": 380 },
                 "epgbest": { "skipped": "EPG_BEST_URL not set (see README)" } },
   "channelsWithData": 1916
 ```

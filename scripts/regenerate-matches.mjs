@@ -21,11 +21,12 @@
  *       drop entries whose channel id is no longer in the live catalog
  *       (fetches https://tontonan.online/catalog.json)
  *
- * Orphan entries are the 2,232 entries (Nov 2026) across ~137 guide sites
- * that no adapter reads — only epg.iptvx.one, i.mjh.nz and
- * tvguide.myjcom.jp have adapters. Pruning them shrinks matches.json from
- * ~423 KB to ~160 KB and stops the file implying coverage that does not
- * exist. Review the git diff before committing a prune.
+ * Orphan entries are entries across guide sites that no adapter reads —
+ * only epg.iptvx.one, i.mjh.nz and tvguide.myjcom.jp have adapters. The
+ * 2,232 orphans present in Nov 2026 were pruned on 2026-11-12
+ * (matches.json 3,367 -> 1,135 entries, ~423 KB -> ~160 KB); the audit
+ * now reports 0 orphans. --prune-orphans stays as the guard for any
+ * future drift. Review the git diff before committing a prune.
  */
 import fs from "node:fs";
 

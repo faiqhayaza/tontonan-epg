@@ -74,18 +74,26 @@ const ccOf = (s) => /\.([a-z]{2})(@|$)/i.exec(s)?.[1].toLowerCase() ?? null;
 
 async function loadCatalog() {
   if (/^https?:\/\//.test(CATALOG)) {
-    const r = await fetch(CATALOG, { headers: { "User-Agent": "tontonan-epg/1.0" } });
+    // Same 60 s timeout discipline as build-epg.mjs's fetchBuf: without
+    // one, a hung mirror fetch hangs this step until the job timeout.
+    const r = await fetch(CATALOG, { headers: { "User-Agent": "tontonan-epg/1.0" }, signal: AbortSignal.timeout(60_000) });
     if (!r.ok) throw new Error(`catalog fetch failed: HTTP ${r.status} (${CATALOG})`);
     return r.json();
   }
   return JSON.parse(fs.readFileSync(CATALOG, "utf8"));
 }
 
+/* Missing file (first run) -> null. A file that exists but is corrupt
+ * must fail loudly: silently treating it as empty would mark every
+ * channel uncovered and fill the grab list with already-covered
+ * channels (and, for matches.json, re-grab channels that already have
+ * a dedicated adapter). */
 function loadJsonOrEmpty(path) {
   try {
     return JSON.parse(fs.readFileSync(path, "utf8"));
-  } catch {
-    return null;
+  } catch (e) {
+    if (e.code === "ENOENT") return null;
+    throw e;
   }
 }
 
