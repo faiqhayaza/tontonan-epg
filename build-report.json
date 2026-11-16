@@ -1,30 +1,30 @@
 {
-  "generatedAt": 1794812182083,
+  "generatedAt": 1794858367826,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 326,
-      "xmlMB": 368.3
+      "withData": 334,
+      "xmlMB": 262.7
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 637,
+      "withData": 649,
       "failedPaths": [
+        {
+          "path": "Roku/all",
+          "error": "downloaded 37521702 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
+        },
         {
           "path": "Flash/epg",
           "error": "HTTP 404 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml"
         },
         {
-          "path": "Roku/all",
-          "error": "downloaded 37687262 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
-          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
-        },
-        {
           "path": "SkyGo/epg",
-          "error": "downloaded 68427674 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml)",
+          "error": "downloaded 69132353 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml"
         }
       ]
@@ -34,29 +34,29 @@
       "withData": 5
     },
     "epgshare": {
-      "channels": 1038,
-      "files": 58,
-      "regions": 58,
-      "withData": 923,
+      "channels": 1037,
+      "files": 59,
+      "regions": 59,
+      "withData": 910,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1411,
-      "withData": 722,
-      "guideKB": 21272
+      "channels": 1378,
+      "withData": 752,
+      "guideKB": 9672
     },
     "epgpw": {
-      "channels": 429,
+      "channels": 433,
       "files": 20,
-      "withData": 412
+      "withData": 417
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3025,
+  "channelsWithData": 3067,
   "gate": {
-    "prevChannelsWithData": 3030,
+    "prevChannelsWithData": 3025,
     "pass": true
   }
 }
