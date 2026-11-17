@@ -16,9 +16,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     # 90 min, not 45: the epgpw leg alone is 20 sequential countries
-    # x 180 s fetch timeouts = 60 min worst case (plus one transient
-    # retry each), so a 45 min job timeout kills the job mid-build
-    # instead of failing per-country. See build-epg.mjs TIMEOUT_MS.
+    # x (180 s + 2 s backoff + 180 s retry) = ~121 min worst case if
+    # every fetch times out, so a 45 min job timeout kills the job
+    # mid-build instead of failing per-country. The 90 min timeout is
+    # a backstop, not a budget: in a total outage it kills the build
+    # mid-flight, before a failing report can be written (the last
+    # good epg.json stays live — nothing is committed unless the gate
+    # passes). See build-epg.mjs TIMEOUT_MS.
     timeout-minutes: 90
     steps:
       # SHA-pinned actions (actions/checkout@v4, actions/setup-node@v4).
