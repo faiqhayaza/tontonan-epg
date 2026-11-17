@@ -29,8 +29,9 @@
  *                                 (secret); skipped when unset
  */
 import fs from "node:fs";
-import { extractXmltv, jstToMs, normalizeName, parseXmltvChannels } from "./lib/epg-utils.mjs";
+import { extractXmltv, jstToMs, parseXmltvChannels } from "./lib/epg-utils.mjs";
 import { fetchBuf, gunzipCapped } from "./lib/fetch.mjs";
+import { buildCatalogIndexes, buildCountryNameIndex, loadCatalog, matchEpgpwNames, resolveGuideId, stripId } from "./lib/catalog.mjs";
 
 const MATCHES = JSON.parse(fs.readFileSync(new URL("./matches.json", import.meta.url), "utf8"));
 const NOW = Date.now();
@@ -43,7 +44,6 @@ const WIN_END = NOW + 16 * 3600_000;
  * if every fetch times out — see .github/workflows/epg.yml, whose
  * 45 min job timeout is the binding constraint (nit N11). */
 const TIMEOUT_MS = {
-  CATALOG: 60_000,
   IPTVX: 120_000,
   MJH: 90_000,
   MYJCOM: 30_000,
@@ -181,6 +181,14 @@ async function adapterMyjcom() {
  * so we fetch listings first and only download a region's XML when it
  * can actually contribute a channel the earlier adapters missed.
  * ------------------------------------------------------------------ */
+/* EPGShare region list, frozen snapshot. EPGShare publishes no region
+ * index (checked 2026-11-17: the homepage links no region files), so
+ * this list is hand-maintained: last re-derived from the per-region
+ * .txt listings on 2026-11-17 (101 regions). If EPGShare adds a region
+ * its channels are silently never fetched; if one is removed its
+ * listing 404s into failedLists on every build, which is the signal to
+ * drop it from this list. Re-derive by fetching each region's .txt
+ * listing and keeping the ones that answer 200. */
 const EPGSHARE_REGIONS = (
   "AE1 AL1 ALJAZEERA1 AR1 ASIANTELEVISION1 AT1 AU1 AUDACY1 BA1 BB1 BE2 BEIN1 BG1 BR1 BR2 " +
   "CA2 CH1 CL1 CO1 CR1 CY1 CZ1 DE1 DELUXEMUSIC1 DIRECTVSPORTS1 DISTROTV1 DK1 DO1 DRAFTKINGS1 " +
@@ -192,29 +200,11 @@ const EPGSHARE_REGIONS = (
 ).split(" ");
 
 async function adapterEpgshare() {
-  // Fetch the catalog from the Oracle A1 mirror, NOT tontonan.online:
-  // Cloudflare Bot Fight Mode challenges GitHub Actions runners, so the
-  // site's own catalog.json 403s from the workflow (Nov 2026, feed halved
-  // to ~1,000 channels for 2 days). The A1 serves the same file at
-  // https://oracle-relay.faiqhayaza.com/catalog.json (Caddy static file,
-  // DNS-only, no Cloudflare in the path); the PC catalog build publishes
-  // it there on every rebuild (scripts/gen-catalog-json.mjs in tontonan).
-  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", TIMEOUT_MS.CATALOG);
-  const catalog = JSON.parse(catBuf.toString("utf8"));
-  const baseOf = (id) => String(id).split("@")[0];
-  const ccOf = (s) => /\.([a-z]{2})$/i.exec(s)?.[1].toLowerCase() ?? null;
-  const strip = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-  const byBase = new Map(); // base id -> [catalogId]
-  const byLower = new Map(); // lowercased base -> base
-  const stripCount = new Map(); // stripped base -> how many catalog bases share it
-  for (const ch of catalog.channels ?? []) {
-    const b = baseOf(ch.id);
-    if (!byBase.has(b)) byBase.set(b, []);
-    byBase.get(b).push(ch.id);
-    byLower.set(b.toLowerCase(), b);
-    stripCount.set(strip(b), (stripCount.get(strip(b)) ?? 0) + 1);
-  }
+  // Catalog via loadCatalog() (lib/catalog.mjs): the A1 mirror, NOT
+  // tontonan.online — the site's own catalog.json 403s from GitHub
+  // Actions runners behind Cloudflare Bot Fight Mode.
+  const catalog = await loadCatalog();
+  const idx = buildCatalogIndexes(catalog.channels);
 
   // Fetch all region listings first (small); collect esId -> regions.
   const esRegions = new Map();
@@ -239,10 +229,10 @@ async function adapterEpgshare() {
   }
   await Promise.all(Array.from({ length: WORKERS.EPGSHARE_LIST }, listWorker));
 
+  // Stripped-id counts on the GUIDE side, for the fuzzy match layer:
+  // a stripped match is accepted only when unique on both sides.
   const esStripCount = new Map();
-  for (const id of esRegions.keys()) esStripCount.set(strip(id), (esStripCount.get(strip(id)) ?? 0) + 1);
-  const byStrip = new Map(); // stripped base -> base, unique catalog bases only
-  for (const b of byBase.keys()) if (stripCount.get(strip(b)) === 1) byStrip.set(strip(b), b);
+  for (const id of esRegions.keys()) esStripCount.set(stripId(id), (esStripCount.get(stripId(id)) ?? 0) + 1);
 
   // Resolve each EPGShare id to at most one catalog channel; an id is
   // claimed by the first region (in EPGSHARE_REGIONS order) listing it.
@@ -252,18 +242,9 @@ async function adapterEpgshare() {
   for (const region of EPGSHARE_REGIONS) {
     for (const [esId, regions] of esRegions) {
       if (regions[0] !== region) continue;
-      let base = null;
-      if (byBase.has(esId)) base = esId;
-      else if (byLower.has(esId.toLowerCase())) base = byLower.get(esId.toLowerCase());
-      else {
-        const key = strip(esId);
-        if (key.length >= 4 && esStripCount.get(key) === 1) {
-          const b = byStrip.get(key);
-          if (b && (!ccOf(b) || !ccOf(esId) || ccOf(b) === ccOf(esId))) base = b;
-        }
-      }
+      const base = resolveGuideId(esId, idx, { guideStripCount: esStripCount });
       if (!base) continue;
-      for (const cid of byBase.get(base)) {
+      for (const cid of idx.byBase.get(base)) {
         if (claimed.has(cid) || results[cid]?.length) continue;
         claimed.add(cid);
         if (!wantedByRegion.has(region)) wantedByRegion.set(region, new Map());
@@ -371,22 +352,11 @@ const EPW_COUNTRIES = (
 ).split(" ");
 
 async function adapterEpgpw() {
-  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", TIMEOUT_MS.CATALOG);
-  const catalog = JSON.parse(catBuf.toString("utf8"));
+  const catalog = await loadCatalog();
   // Per-country name index over catalog channels (all of them; the
   // already-covered ones are filtered out at match time so they cannot
   // steal a unique match from an uncovered channel).
-  const byCountryName = new Map(); // cc -> normName -> [catalogId]
-  for (const ch of catalog.channels ?? []) {
-    const cc = (ch.countryCode || "").toUpperCase();
-    if (!cc) continue;
-    const n = normalizeName(ch.name ?? "");
-    if (n.length < 4) continue;
-    if (!byCountryName.has(cc)) byCountryName.set(cc, new Map());
-    const m = byCountryName.get(cc);
-    if (!m.has(n)) m.set(n, []);
-    m.get(n).push(ch.id);
-  }
+  const byCountryName = buildCountryNameIndex(catalog.channels);
 
   let files = 0;
   let matchedCids = new Set();
@@ -398,11 +368,7 @@ async function adapterEpgpw() {
       const xml = gunzipCapped(gz, EPW_MAX_XML_BYTES, url).toString("utf8");
       const guideChannels = parseXmltvChannels(xml);
       const names = byCountryName.get(cc) ?? new Map();
-      const wanted = new Map(); // numeric epg.pw id -> catalogId
-      for (const [numId, name] of guideChannels) {
-        const cands = (names.get(normalizeName(name)) ?? []).filter((cid) => !results[cid]?.length);
-        if (cands.length === 1) wanted.set(numId, cands[0]);
-      }
+      const wanted = matchEpgpwNames(guideChannels, names, (cid) => results[cid]?.length);
       extractXmltv(xml, wanted, results, WIN_START, WIN_END);
       for (const cid of wanted.values()) matchedCids.add(cid);
       files++;
@@ -444,23 +410,16 @@ async function adapterEpgbest() {
     buf[0] === 0x1f && buf[1] === 0x8b
       ? gunzipCapped(buf, EPGBEST_MAX_XML_BYTES, url).toString("utf8")
       : buf.toString("utf8");
-  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", TIMEOUT_MS.CATALOG);
-  const catalog = JSON.parse(catBuf.toString("utf8"));
-  const baseOf = (id) => String(id).split("@")[0];
-  const byBase = new Map();
-  const byLower = new Map();
-  for (const ch of catalog.channels ?? []) {
-    const b = baseOf(ch.id);
-    if (!byBase.has(b)) byBase.set(b, []);
-    byBase.get(b).push(ch.id);
-    byLower.set(b.toLowerCase(), b);
-  }
+  const catalog = await loadCatalog();
+  const idx = buildCatalogIndexes(catalog.channels);
   const guideChannels = parseXmltvChannels(xml);
   const wanted = new Map();
   for (const gid of guideChannels.keys()) {
-    const base = byBase.has(gid) ? gid : byBase.has(baseOf(gid)) ? baseOf(gid) : byLower.get(gid.toLowerCase()) ?? byLower.get(baseOf(gid).toLowerCase());
+    // First two match layers only (exact / case-insensitive); the
+    // punctuation-stripped layer is epgshare's, not epgbest's.
+    const base = resolveGuideId(gid, idx, { allowStripped: false });
     if (!base) continue;
-    for (const cid of byBase.get(base)) {
+    for (const cid of idx.byBase.get(base)) {
       if (results[cid]?.length) continue;
       wanted.set(gid, cid);
       break;

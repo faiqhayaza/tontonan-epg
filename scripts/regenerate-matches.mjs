@@ -34,6 +34,7 @@
  */
 import fs from "node:fs";
 import { USER_AGENT } from "../lib/fetch.mjs";
+import { CATALOG_MIRROR_URL } from "../lib/catalog.mjs";
 
 const MATCHES_PATH = new URL("../matches.json", import.meta.url);
 
@@ -95,8 +96,7 @@ if (pruneStale) {
   // 403s from automation — the same reason every catalog fetch in
   // build-epg.mjs uses the mirror. (This used to fetch tontonan.online
   // and so only ever worked from a local run.)
-  // Unified behind lib/catalog.mjs's CATALOG_MIRROR_URL by the B2 change.
-  const catRes = await fetch("https://oracle-relay.faiqhayaza.com/catalog.json", {
+  const catRes = await fetch(CATALOG_MIRROR_URL, {
     headers: { "User-Agent": USER_AGENT },
     signal: AbortSignal.timeout(60_000),
   });

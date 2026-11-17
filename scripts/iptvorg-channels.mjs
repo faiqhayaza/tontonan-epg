@@ -51,6 +51,8 @@
  *     [--max-channels N]
  */
 import fs from "node:fs";
+import { USER_AGENT } from "../lib/fetch.mjs";
+import { CATALOG_MIRROR_URL, baseOf, ccOf } from "../lib/catalog.mjs";
 import { normalizeName } from "../lib/epg-utils.mjs";
 
 const args = process.argv.slice(2);
@@ -58,7 +60,7 @@ const opt = (name, def) => {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : def;
 };
-const CATALOG = opt("--catalog", "https://oracle-relay.faiqhayaza.com/catalog.json");
+const CATALOG = opt("--catalog", CATALOG_MIRROR_URL);
 const EPG_PATH = opt("--epg", "./epg.json");
 const MATCHES_PATH = opt("--matches", "./matches.json");
 const SITES_DIR = opt("--sites", "./iptvorg/sites");
@@ -69,14 +71,11 @@ const MAX_CHANNELS = Number(opt("--max-channels", "2500")) || 2500;
 /* Sites with a dedicated adapter in build-epg.mjs — never grab them here. */
 const EXCLUDED_SITES = new Set(["i.mjh.nz", "epg.iptvx.one", "tvguide.myjcom.jp", "epgshare01.online"]);
 
-const baseOf = (id) => String(id).split("@")[0];
-const ccOf = (s) => /\.([a-z]{2})(@|$)/i.exec(s)?.[1].toLowerCase() ?? null;
-
 async function loadCatalog() {
   if (/^https?:\/\//.test(CATALOG)) {
     // Same 60 s timeout discipline as build-epg.mjs's fetchBuf: without
     // one, a hung mirror fetch hangs this step until the job timeout.
-    const r = await fetch(CATALOG, { headers: { "User-Agent": "tontonan-epg/1.0" }, signal: AbortSignal.timeout(60_000) });
+    const r = await fetch(CATALOG, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(60_000) });
     if (!r.ok) throw new Error(`catalog fetch failed: HTTP ${r.status} (${CATALOG})`);
     return r.json();
   }

@@ -31,7 +31,10 @@ function stageFixture() {
   fs.mkdirSync(path.join(dir, "scripts"));
   fs.mkdirSync(path.join(dir, "lib"));
   fs.copyFileSync(path.join(repoRoot, "scripts/regenerate-matches.mjs"), path.join(dir, "scripts/regenerate-matches.mjs"));
-  fs.copyFileSync(path.join(repoRoot, "lib/fetch.mjs"), path.join(dir, "lib/fetch.mjs"));
+  // The script's imports (lib/fetch.mjs, lib/catalog.mjs) and their
+  // own imports (lib/epg-utils.mjs) must all be staged.
+  for (const f of ["fetch.mjs", "catalog.mjs", "epg-utils.mjs"])
+    fs.copyFileSync(path.join(repoRoot, "lib", f), path.join(dir, "lib", f));
   fs.writeFileSync(path.join(dir, "matches.json"), JSON.stringify(FIXTURE, null, 2));
   return dir;
 }
@@ -79,8 +82,11 @@ describe("regenerate-matches.mjs", () => {
     // against a hardcoded URL, so there is no fixture that can observe
     // which host it hits. The guard fails loudly if the URL regresses
     // to the host the repo's own comments say 403s from automation.
+    // The URL itself lives in exactly one place (lib/catalog.mjs);
+    // this asserts the script uses that constant.
     const src = fs.readFileSync(path.join(repoRoot, "scripts/regenerate-matches.mjs"), "utf8");
-    assert.ok(src.includes("https://oracle-relay.faiqhayaza.com/catalog.json"));
+    assert.ok(src.includes('import { CATALOG_MIRROR_URL } from "../lib/catalog.mjs"'));
+    assert.ok(src.includes("fetch(CATALOG_MIRROR_URL, {"));
     assert.ok(!src.includes("https://tontonan.online/catalog.json"));
     // And the fetches carry a timeout (S4).
     assert.ok(src.includes("AbortSignal.timeout(60_000)"));
