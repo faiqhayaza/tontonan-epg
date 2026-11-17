@@ -45,6 +45,10 @@
  * that site's channels for one build; the failure gate in build-epg.mjs
  * still guards the overall output.
  *
+ * Matching/dedup/cap logic lives in lib/iptvorg.mjs (unit-tested);
+ * this file keeps only the CLI parsing, the file reads, and the
+ * output writes.
+ *
  * Usage:
  *   node scripts/iptvorg-channels.mjs [--catalog URL|path] [--epg path]
  *     [--matches path] [--sites dir] [--output path] [--map-output path]
@@ -52,8 +56,16 @@
  */
 import fs from "node:fs";
 import { USER_AGENT } from "../lib/fetch.mjs";
-import { CATALOG_MIRROR_URL, baseOf, ccOf } from "../lib/catalog.mjs";
-import { normalizeName } from "../lib/epg-utils.mjs";
+import { CATALOG_MIRROR_URL } from "../lib/catalog.mjs";
+import {
+  buildCatByBase,
+  buildNameIndex,
+  buildUncovered,
+  matchEntry,
+  parseEntries,
+  parseMaxChannels,
+  pickChannels,
+} from "../lib/iptvorg.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -66,7 +78,7 @@ const MATCHES_PATH = opt("--matches", "./matches.json");
 const SITES_DIR = opt("--sites", "./iptvorg/sites");
 const OUTPUT = opt("--output", "./iptvorg.channels.xml");
 const MAP_OUTPUT = opt("--map-output", "./iptvorg.channels.json");
-const MAX_CHANNELS = Number(opt("--max-channels", "2500")) || 2500;
+const MAX_CHANNELS = parseMaxChannels(opt("--max-channels", "2500"));
 
 /* Sites with a dedicated adapter in build-epg.mjs — never grab them here. */
 const EXCLUDED_SITES = new Set(["i.mjh.nz", "epg.iptvx.one", "tvguide.myjcom.jp", "epgshare01.online"]);
@@ -96,48 +108,15 @@ function loadJsonOrEmpty(path) {
   }
 }
 
-/* Parse one <channel ...>name</channel> entry; attributes in any order. */
-function parseEntries(xml) {
-  const out = [];
-  const re = /<channel\b([^>]*)>([^<]*)<\/channel>/g;
-  let m;
-  while ((m = re.exec(xml)) !== null) {
-    const attrs = m[1];
-    const get = (k) => new RegExp(`${k}="([^"]*)"`).exec(attrs)?.[1] ?? "";
-    out.push({ site: get("site"), site_id: get("site_id"), lang: get("lang") || "en", xmltv_id: get("xmltv_id"), name: m[2].trim() });
-  }
-  return out;
-}
-
 const catalog = await loadCatalog();
 const prevEpg = loadJsonOrEmpty(EPG_PATH);
 const covered = new Set(Object.keys(prevEpg?.channels ?? {}));
 const matches = loadJsonOrEmpty(MATCHES_PATH) ?? {};
 const matchedIds = new Set(Object.keys(matches));
 
-const catByBase = new Map(); // base -> [{id, name, cc}]
-for (const ch of catalog.channels ?? []) {
-  const b = baseOf(ch.id);
-  if (!catByBase.has(b)) catByBase.set(b, []);
-  catByBase.get(b).push({ id: ch.id, name: ch.name ?? "", cc: (ch.countryCode || "").toLowerCase() });
-}
-/* Uncovered bases: no feed in the previous epg.json, no dedicated adapter. */
-const uncovered = new Map();
-for (const [b, chs] of catByBase) {
-  if (chs.some((c) => covered.has(c.id))) continue;
-  if (matchedIds.has(chs[0].id) || chs.some((c) => matchedIds.has(c.id))) continue;
-  uncovered.set(b, chs);
-}
-/* Name index over uncovered channels only. */
-const byName = new Map(); // normName -> [{base, cc}]
-for (const [b, chs] of uncovered) {
-  for (const c of chs) {
-    const n = normalizeName(c.name);
-    if (n.length < 4) continue;
-    if (!byName.has(n)) byName.set(n, []);
-    byName.get(n).push({ base: b, cc: c.cc });
-  }
-}
+const catByBase = buildCatByBase(catalog.channels);
+const uncovered = buildUncovered(catByBase, covered, matchedIds);
+const byName = buildNameIndex(uncovered);
 
 const siteDirs = fs.readdirSync(SITES_DIR, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
 const idMatches = []; // {site, site_id, lang, xmltv_id(base), name}
@@ -151,53 +130,18 @@ for (const site of siteDirs) {
     for (const e of parseEntries(xml)) {
       if (!e.site || !e.site_id || !e.name) continue;
       const y = siteYield.get(site) ?? { id: 0, name: 0 };
-      const xidBase = e.xmltv_id ? baseOf(e.xmltv_id) : null;
-      if (xidBase && uncovered.has(xidBase)) {
-        idMatches.push({ site: e.site || site, site_id: e.site_id, lang: e.lang, xmltv_id: xidBase, name: e.name });
-        y.id++;
-      } else {
-        const cands = byName.get(normalizeName(e.name)) ?? [];
-        const cc = ccOf(e.xmltv_id);
-        const hit = cands.filter((c) => !cc || !c.cc || c.cc === cc);
-        if (hit.length === 1 && uncovered.has(hit[0].base)) {
-          nameMatches.push({ site: e.site || site, site_id: e.site_id, lang: e.lang, xmltv_id: hit[0].base, name: e.name });
-          y.name++;
-        }
+      const hit = matchEntry(e, uncovered, byName);
+      if (hit) {
+        const entry = { site: e.site || site, site_id: e.site_id, lang: e.lang, xmltv_id: hit.xmltv_id, name: e.name };
+        (hit.kind === "id" ? idMatches : nameMatches).push(entry);
+        y[hit.kind]++;
       }
       siteYield.set(site, y);
     }
   }
 }
 
-/* Dedup: one entry per catalog base (first wins), one per (site, site_id).
- * Id matches first, sites ordered by yield so the cap keeps the best. */
-function dedup(list) {
-  const seenBase = new Set();
-  const seenSiteId = new Set();
-  const out = [];
-  const sorted = [...list].sort((a, b) => {
-    const ya = siteYield.get(a.site) ?? { id: 0, name: 0 };
-    const yb = siteYield.get(b.site) ?? { id: 0, name: 0 };
-    return yb.id + yb.name - (ya.id + ya.name) || (a.site < b.site ? -1 : 1) || (a.xmltv_id < b.xmltv_id ? -1 : 1);
-  });
-  for (const e of sorted) {
-    if (seenBase.has(e.xmltv_id)) continue;
-    const k = `${e.site}\0${e.site_id}`;
-    if (seenSiteId.has(k)) continue;
-    seenBase.add(e.xmltv_id);
-    seenSiteId.add(k);
-    out.push(e);
-  }
-  return out;
-}
-const picked = [...dedup(idMatches), ...dedup(nameMatches)].slice(0, MAX_CHANNELS);
-/* The second dedup pass above runs per-list; re-dedup across both lists. */
-const finalSeen = new Set();
-const final = picked.filter((e) => {
-  if (finalSeen.has(e.xmltv_id)) return false;
-  finalSeen.add(e.xmltv_id);
-  return true;
-});
+const final = pickChannels(idMatches, nameMatches, siteYield, MAX_CHANNELS);
 
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<channels>\n`;
