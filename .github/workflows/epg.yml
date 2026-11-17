@@ -15,7 +15,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 90 min, not 45: the epgpw leg alone is 20 sequential countries
+    # x 180 s fetch timeouts = 60 min worst case (plus one transient
+    # retry each), so a 45 min job timeout kills the job mid-build
+    # instead of failing per-country. See build-epg.mjs TIMEOUT_MS.
+    timeout-minutes: 90
     steps:
       # SHA-pinned actions (actions/checkout@v4, actions/setup-node@v4).
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -83,7 +87,12 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add build-report.json
           # Channel list files only exist when the grabber steps ran.
-          git add iptvorg.channels.xml iptvorg.channels.json 2>/dev/null || true
+          # A failed `git add` of an existing file must not be swallowed:
+          # it would hide a corrupt index. The `|| true` it replaces hid
+          # real errors (and the missing-file case is handled by the test).
+          if [ -f iptvorg.channels.xml ] || [ -f iptvorg.channels.json ]; then
+            git add iptvorg.channels.xml iptvorg.channels.json || echo "::warning::git add of iptv-org channel files failed"
+          fi
           if git diff --cached --quiet; then
             echo "no changes"
           else
