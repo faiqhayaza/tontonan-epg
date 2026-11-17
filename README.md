@@ -27,7 +27,8 @@ Sources (guide availability data: [iptv-org](https://github.com/iptv-org/databas
 - `iptv-org/epg` grabber — the workflow clones the grabber, generates a
   channel list from the live catalog with `scripts/iptvorg-channels.mjs`
   (id match, then unique display-name match; sites with a dedicated
-  adapter excluded; capped at 1,500 channels per build), runs the grab
+  adapter excluded; capped at 1,500 channels per build in the workflow —
+  the script default is 2,500), runs the grab
   for one day, and merges the resulting `iptvorg-guide.xml`. Best
   effort: a grab failure only skips that adapter for one build.
 - `epg.pw` per-country XMLTV files (20 countries, daily) — matched to
@@ -51,8 +52,8 @@ project — only the Node standard library).
 
 ```sh
 node build-epg.mjs   # writes epg.json + build-report.json
-npm test             # unit tests for the helpers in lib/epg-utils.mjs
-npm run check        # syntax-checks the scripts
+npm test             # unit tests: lib helpers, pipeline (gate/matchers), fetch, scripts
+npm run check        # syntax-checks every .mjs file (lib, scripts, tests)
 ```
 
 A local run skips the `iptvorg` adapter (no `iptvorg-guide.xml` unless
@@ -117,18 +118,25 @@ are covered again without entries in `matches.json`.
 
 ## build-report.json
 
-Per-build adapter stats, committed alongside `epg.json`:
+Per-build adapter stats, committed alongside `epg.json`. `channels` is
+the number of channels the adapter attempted (matches.json rows for
+iptvx/mjh/myjcom; matched catalog channels for epgshare/epgpw/epgbest;
+the guide's wanted channels for iptvorg) — one definition everywhere,
+so the per-adapter numbers are comparable. Example from the real
+2026-11-16 build (numbers move a little from build to build as
+upstreams change; the per-adapter `withData` figures always sum to
+`channelsWithData`):
 
 ```json
 { "generatedAt": 0,
-  "adapters": { "iptvx":   { "channels": 343, "withData": 331, "xmlMB": 312 },
-                "mjh":     { "channels": 787, "files": 26, "paths": 27, "withData": 680 },
+  "adapters": { "iptvx":   { "channels": 343, "withData": 326, "xmlMB": 368.3 },
+                "mjh":     { "channels": 787, "files": 24, "paths": 27, "withData": 637 },
                 "myjcom":  { "channels": 5, "withData": 5 },
-                "epgshare":{ "channels": 1031, "files": 58, "regions": 58, "withData": 916 },
-                "iptvorg": { "channels": 1500, "guideKB": 42000, "withData": 1100 },
-                "epgpw":   { "channels": 420, "files": 20, "withData": 380 },
+                "epgshare":{ "channels": 1038, "files": 58, "regions": 58, "withData": 923 },
+                "iptvorg": { "channels": 1411, "guideKB": 21272, "withData": 722 },
+                "epgpw":   { "channels": 429, "files": 20, "withData": 412 },
                 "epgbest": { "skipped": "EPG_BEST_URL not set (see README)" } },
-  "channelsWithData": 1916
+  "channelsWithData": 3025
 ```
 
 ## License
