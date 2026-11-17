@@ -26,6 +26,25 @@ describe("xmltvTime", () => {
     assert.equal(xmltvTime("not a date"), null);
     assert.equal(xmltvTime("20261112"), null);
   });
+
+  it("returns null for rolled-over dates instead of a wrong time (S1)", () => {
+    // Date.UTC silently rolls these over (month 13 -> next January);
+    // upstream garbage must not become a plausible-looking programme.
+    assert.equal(xmltvTime("20261301093000 +0000"), null);
+    assert.equal(xmltvTime("20261132093000 +0000"), null);
+    assert.equal(xmltvTime("20260230093000 +0000"), null); // Feb 30 never exists
+    assert.equal(xmltvTime("20260229093000 +0000"), null); // 2026 is not a leap year
+    assert.equal(xmltvTime("20261112240000 +0000"), null);
+    assert.equal(xmltvTime("20261112096000 +0000"), null);
+    assert.equal(xmltvTime("20261112093060 +0000"), null);
+    assert.equal(xmltvTime("20261112093000 +9960"), null); // offset 99h60m
+    assert.equal(xmltvTime("20261112093000 +2400"), null);
+  });
+
+  it("still accepts real dates, including a leap day", () => {
+    assert.equal(xmltvTime("20240229093000 +0000"), Date.UTC(2024, 1, 29, 9, 30, 0));
+    assert.equal(xmltvTime("20261112093000 +1400"), Date.UTC(2026, 10, 11, 19, 30, 0));
+  });
 });
 
 describe("jstToMs", () => {
@@ -41,6 +60,12 @@ describe("jstToMs", () => {
     assert.ok(Number.isNaN(jstToMs("garbage")));
     assert.ok(Number.isNaN(jstToMs("2026")));
     assert.ok(Number.isNaN(jstToMs("2026111209300")));
+  });
+
+  it("returns NaN for rolled-over dates (S1)", () => {
+    assert.ok(Number.isNaN(jstToMs("20261332999999")));
+    assert.ok(Number.isNaN(jstToMs("20260230093000")));
+    assert.ok(Number.isNaN(jstToMs("20261112240000")));
   });
 });
 
@@ -60,6 +85,12 @@ describe("unescapeXml", () => {
     // the whole adapter's extraction run.
     assert.equal(unescapeXml("A &#999999999; B"), "A &#999999999; B");
     assert.equal(unescapeXml("A &#x110000; B"), "A &#x110000; B");
+  });
+
+  it("leaves a NUL entity literal instead of decoding it (N3)", () => {
+    // A literal NUL in a programme title is garbage that reaches clients.
+    assert.equal(unescapeXml("A &#0; B"), "A &#0; B");
+    assert.equal(unescapeXml("A &#x0; B"), "A &#x0; B");
   });
 });
 
@@ -103,6 +134,13 @@ describe("parseXmltvChannels", () => {
       <channel lang="GB" id="99"><display-name>Late Id</display-name></channel>
     </tv>`;
     assert.deepEqual([...parseXmltvChannels(xml)], [["99", "Late Id"]]);
+  });
+
+  it("reads single-quoted attributes too (N14)", () => {
+    const xml = `<tv>
+      <channel id='77'><display-name>Single Quoted</display-name></channel>
+    </tv>`;
+    assert.deepEqual([...parseXmltvChannels(xml)], [["77", "Single Quoted"]]);
   });
 });
 
@@ -171,5 +209,12 @@ describe("extractXmltv", () => {
     const out = {};
     extractXmltv(xml, new Map([["X", "c"]]), out, WIN_START, WIN_END);
     assert.equal(out["c"].length, 1);
+  });
+
+  it("reads single-quoted programme attributes too (N14)", () => {
+    const xml = `<tv><programme start='20261112010000 +0000' stop='20261112020000 +0000' channel='X'><title>Quoted</title></programme></tv>`;
+    const out = {};
+    extractXmltv(xml, new Map([["X", "c"]]), out, WIN_START, WIN_END);
+    assert.deepEqual(out["c"].map((p) => p[2]), ["Quoted"]);
   });
 });
