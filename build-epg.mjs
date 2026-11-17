@@ -57,8 +57,8 @@ const WIN_END = NOW + 16 * 3600_000;
 /* Per-adapter fetch timeouts and worker counts, named (not inline
  * literals) so the worst-case budget is visible in one place. Worst
  * case per build: epgpw is sequential, 20 countries x 180 s = 60 min
- * if every fetch times out — see .github/workflows/epg.yml, whose
- * 45 min job timeout is the binding constraint (nit N11). */
+ * if every fetch times out — the epgpw leg is the binding constraint
+ * on the job timeout in .github/workflows/epg.yml. */
 const TIMEOUT_MS = {
   IPTVX: 120_000,
   MJH: 90_000,
@@ -472,8 +472,10 @@ try {
 }
 const gate = evaluateGate(total, prevTotal);
 if (matchesError) {
-  // A corrupt matches.json fails the build on its own: with no map,
-  // total is 0 and the gate already fails, but say why in the report.
+  // A corrupt matches.json fails the build on its own: the site
+  // adapters lose their whole map (~1,400 channels), so the output
+  // would be silently degraded even if the generic adapters still
+  // produced enough channels for the gate's numbers to pass.
   gate.reasons = [...(gate.reasons ?? []), `matches.json could not be loaded: ${matchesError}`];
   gate.pass = false;
 }
