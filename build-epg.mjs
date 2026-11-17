@@ -38,8 +38,9 @@ import { buildMjhWanted, evaluateGate, extractMyjcomProgrammes, loadMatches, rea
  * file used to throw here at import time, before any adapter ran and
  * before build-report.json was written — the process died with a raw
  * stack and no report, contradicting the "report is ALWAYS written"
- * promise below. Now a bad file yields an empty map plus matchesError;
- * the adapters run with zero rows, the gate fails on zero channels,
+ * promise below. Now a bad file — corrupt JSON, a non-object, or a
+ * malformed entry — yields an empty map plus matchesError; the
+ * adapters run with zero rows, the gate fails on zero channels,
  * and the report names the cause. */
 let MATCHES = {};
 let matchesError = null;
@@ -56,9 +57,13 @@ const WIN_END = NOW + 16 * 3600_000;
 
 /* Per-adapter fetch timeouts and worker counts, named (not inline
  * literals) so the worst-case budget is visible in one place. Worst
- * case per build: epgpw is sequential, 20 countries x 180 s = 60 min
- * if every fetch times out — the epgpw leg is the binding constraint
- * on the job timeout in .github/workflows/epg.yml. */
+ * case per build: epgpw is sequential, 20 countries x (180 s + 2 s
+ * backoff + 180 s retry) = ~121 min if every fetch times out — the
+ * epgpw leg is the binding constraint on the job timeout in
+ * .github/workflows/epg.yml. The 90-min job timeout is a backstop,
+ * not a budget: in a total outage it kills the build mid-flight,
+ * before a failing report can be written (the last good epg.json
+ * stays live — nothing is committed unless the gate passes). */
 const TIMEOUT_MS = {
   IPTVX: 120_000,
   MJH: 90_000,
@@ -312,8 +317,16 @@ async function adapterIptvorg() {
   let map;
   try {
     map = JSON.parse(fs.readFileSync(new URL("./iptvorg.channels.json", import.meta.url), "utf8"));
-  } catch {
-    report.iptvorg = { skipped: "iptvorg.channels.json not present (grab step did not run)" };
+  } catch (e) {
+    // A missing file and a corrupt file are different failures and
+    // must not share one message: the first means the grab step did
+    // not run (best-effort, skip quietly); the second means the grab
+    // step wrote something unreadable (an error worth naming).
+    if (e.code === "ENOENT") {
+      report.iptvorg = { skipped: "iptvorg.channels.json not present (grab step did not run)" };
+    } else {
+      report.iptvorg = { error: `iptvorg.channels.json could not be parsed: ${e.message}` };
+    }
     return;
   }
   let guide;

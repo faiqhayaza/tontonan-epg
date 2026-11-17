@@ -41,6 +41,22 @@ describe("xmltvTime", () => {
     assert.equal(xmltvTime("20261112093000 +2400"), null);
   });
 
+  it("returns null for a malformed offset instead of parsing the prefix (R5)", () => {
+    // The unanchored regex used to return a timestamp for these: the
+    // trailing garbage was ignored, and a short offset was silently
+    // dropped (parsed as UTC).
+    assert.equal(xmltvTime("20261112093000 +0900XYZ"), null);
+    assert.equal(xmltvTime("20261112093000 +09"), null);
+    assert.equal(xmltvTime("20261112093000 +090"), null);
+    assert.equal(xmltvTime("20261112093000 +09000"), null);
+    assert.equal(xmltvTime("20261112093000 +0900 junk"), null);
+  });
+
+  it("still accepts trailing whitespace after the offset (R5)", () => {
+    assert.equal(xmltvTime("20261112093000 +0900 "), Date.UTC(2026, 10, 12, 0, 30, 0));
+    assert.equal(xmltvTime("20261112093000  "), Date.UTC(2026, 10, 12, 9, 30, 0));
+  });
+
   it("still accepts real dates, including a leap day", () => {
     assert.equal(xmltvTime("20240229093000 +0000"), Date.UTC(2024, 1, 29, 9, 30, 0));
     assert.equal(xmltvTime("20261112093000 +1400"), Date.UTC(2026, 10, 11, 19, 30, 0));

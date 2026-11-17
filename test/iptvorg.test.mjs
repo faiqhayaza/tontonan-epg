@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -15,6 +16,7 @@ import {
   buildCatByBase,
   buildNameIndex,
   buildUncovered,
+  compareEntries,
   dedupEntries,
   matchEntry,
   parseEntries,
@@ -114,7 +116,7 @@ describe("iptvorg-channels.mjs end to end (black box)", () => {
   it("builds the grab list from fixture inputs", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "epg-iptvorg-test-"));
     try {
-      const repoRoot = new URL("..", import.meta.url).pathname;
+      const repoRoot = fileURLToPath(new URL("..", import.meta.url));
       fs.mkdirSync(path.join(dir, "scripts"));
       fs.mkdirSync(path.join(dir, "lib"));
       fs.copyFileSync(path.join(repoRoot, "scripts/iptvorg-channels.mjs"), path.join(dir, "scripts/iptvorg-channels.mjs"));
@@ -181,5 +183,44 @@ describe("dedupEntries / pickChannels", () => {
     assert.deepEqual(pickChannels(id, name, yieldMap, 10).map((e) => e.xmltv_id), ["A.uk", "B.uk"]);
     assert.deepEqual(pickChannels(id, name, yieldMap, 1).map((e) => e.xmltv_id), ["A.uk"]);
     assert.deepEqual(pickChannels(id, name, yieldMap, 0), []);
+  });
+});
+
+describe("compareEntries", () => {
+  const yieldMap = new Map([
+    ["pluto.tv", { id: 10, name: 5 }],
+    ["xumo", { id: 1, name: 1 }],
+  ]);
+
+  it("returns 0 on a full tie instead of 1 (R4)", () => {
+    // The old comparator returned 1 when the keys were equal, which
+    // violates the sort contract (equal elements must compare 0).
+    const a = { site: "pluto.tv", site_id: "1", xmltv_id: "A.uk" };
+    assert.equal(compareEntries(a, { ...a }, yieldMap), 0);
+  });
+
+  it("breaks a site/xmltv_id tie on site_id, so the order is total (R4)", () => {
+    const lo = { site: "pluto.tv", site_id: "1", xmltv_id: "A.uk" };
+    const hi = { site: "pluto.tv", site_id: "2", xmltv_id: "A.uk" };
+    assert.equal(compareEntries(lo, hi, yieldMap), -1);
+    assert.equal(compareEntries(hi, lo, yieldMap), 1);
+  });
+
+  it("still orders by yield first, then site, then xmltv_id", () => {
+    // The yield term returns the raw difference (a sort comparator
+    // only promises the sign), so these assert sign, not exact -1/1.
+    const hiYield = { site: "pluto.tv", site_id: "9", xmltv_id: "Z.uk" };
+    const loYield = { site: "xumo", site_id: "1", xmltv_id: "A.uk" };
+    assert.ok(compareEntries(hiYield, loYield, yieldMap) < 0); // yield beats xmltv_id
+    assert.ok(compareEntries(loYield, hiYield, yieldMap) > 0);
+    // Equal yield: the site term decides, before xmltv_id.
+    const equalYield = new Map([
+      ["a.tv", { id: 1, name: 1 }],
+      ["b.tv", { id: 1, name: 1 }],
+    ]);
+    const aSite = { site: "a.tv", site_id: "1", xmltv_id: "Z.uk" };
+    const bSite = { site: "b.tv", site_id: "1", xmltv_id: "A.uk" };
+    assert.equal(compareEntries(aSite, bSite, equalYield), -1); // site beats xmltv_id
+    assert.equal(compareEntries(bSite, aSite, equalYield), 1);
   });
 });

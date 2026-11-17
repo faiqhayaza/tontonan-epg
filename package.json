@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "build": "node build-epg.mjs",
-    "check": "for f in build-epg.mjs lib/*.mjs scripts/*.mjs test/*.mjs; do node --check \"$f\" || exit 1; done",
+    "check": "node scripts/check.mjs",
     "test": "node --test"
   },
   "type": "module",

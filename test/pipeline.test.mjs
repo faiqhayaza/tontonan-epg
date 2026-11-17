@@ -50,6 +50,22 @@ describe("loadMatches", () => {
     assert.match(loadMatches("[1, 2]").error, /not an object/);
     assert.deepEqual(loadMatches("{corrupt").matches, {});
   });
+
+  it("rejects a file with a malformed entry instead of crashing the builder (R1)", () => {
+    // A null entry used to crash build-epg.mjs at module top level
+    // (unguarded `m.site` in the bySite index) before any report was
+    // written. Now it yields the same written failing report as a
+    // corrupt file — and one bad entry fails the file, so no channel
+    // silently loses its guide.
+    assert.match(loadMatches('{"A.uk": null}').error, /malformed/);
+    assert.match(loadMatches('{"A.uk": "not-an-object"}').error, /malformed/);
+    assert.match(loadMatches('{"A.uk": ["x"]}').error, /malformed/);
+    assert.match(loadMatches('{"A.uk": {"site": 123, "site_id": "x", "xmltv_id": "A"}}').error, /malformed/);
+    assert.match(loadMatches('{"A.uk": {"site": "i.mjh.nz", "site_id": "x"}}').error, /malformed/);
+    assert.match(loadMatches('{"A.uk": null}').error, /"A\.uk"/);
+    assert.deepEqual(loadMatches('{"A.uk": null}').matches, {});
+    assert.equal(loadMatches('{"A.uk": {"site": "i.mjh.nz", "site_id": "x", "xmltv_id": "A"}}').error, null);
+  });
 });
 
 describe("buildMjhWanted", () => {
