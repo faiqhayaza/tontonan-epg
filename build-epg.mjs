@@ -29,14 +29,30 @@
  *                                 (secret); skipped when unset
  */
 import fs from "node:fs";
-import zlib from "node:zlib";
 import { extractXmltv, jstToMs, normalizeName, parseXmltvChannels } from "./lib/epg-utils.mjs";
+import { fetchBuf, gunzipCapped } from "./lib/fetch.mjs";
 
 const MATCHES = JSON.parse(fs.readFileSync(new URL("./matches.json", import.meta.url), "utf8"));
 const NOW = Date.now();
 const WIN_START = NOW - 3 * 3600_000;
 const WIN_END = NOW + 16 * 3600_000;
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
+/* Per-adapter fetch timeouts and worker counts, named (not inline
+ * literals) so the worst-case budget is visible in one place. Worst
+ * case per build: epgpw is sequential, 20 countries x 180 s = 60 min
+ * if every fetch times out — see .github/workflows/epg.yml, whose
+ * 45 min job timeout is the binding constraint (nit N11). */
+const TIMEOUT_MS = {
+  CATALOG: 60_000,
+  IPTVX: 120_000,
+  MJH: 90_000,
+  MYJCOM: 30_000,
+  EPGSHARE_LIST: 30_000,
+  EPGSHARE_XML: 180_000,
+  EPW: 180_000,
+  EPGBEST: 180_000,
+};
+const WORKERS = { MJH: 6, EPGSHARE_LIST: 6, EPGSHARE_DL: 3 };
 
 const bySite = new Map();
 for (const [cid, m] of Object.entries(MATCHES)) {
@@ -44,35 +60,8 @@ for (const [cid, m] of Object.entries(MATCHES)) {
   bySite.get(m.site).push([cid, m]);
 }
 
-async function fetchBuf(url, timeoutMs = 60_000, { maxBytes = Infinity } = {}) {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), timeoutMs);
-  try {
-    const r = await fetch(url, { signal: c.signal, headers: { "User-Agent": UA }, redirect: "follow" });
-    if (!r.ok) throw fetchError(url, `HTTP ${r.status}`);
-    const declared = Number(r.headers.get("content-length"));
-    if (Number.isFinite(declared) && declared > maxBytes)
-      throw fetchError(url, `content-length ${declared} exceeds cap ${maxBytes}`);
-    const buf = Buffer.from(await r.arrayBuffer());
-    if (buf.length > maxBytes) throw fetchError(url, `downloaded ${buf.length} bytes, exceeds cap ${maxBytes}`);
-    return buf;
-  } catch (e) {
-    // Tag every fetch failure with the URL, so build-report.json can name
-    // the failing fetch. (The Nov 2026 epgshare incident was undiagnosable
-    // for 2 days precisely because the report recorded only "HTTP 403".)
-    if (!e.url) e.url = url;
-    throw e;
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-/* Error carrying the URL that failed, for the build report. */
-function fetchError(url, message) {
-  const e = new Error(`${message} (${url})`);
-  e.url = url;
-  return e;
-}
+/* Fetching (fetchBuf: streaming byte cap + one transient retry) and
+ * gunzipping (gunzipCapped) live in lib/fetch.mjs (unit-tested). */
 
 /* Size caps. The iptvx feed is fetched whole and gunzipped into memory:
  * its uncompressed XML grew 210 MB (Nov 9) -> 312 MB (Nov 12), so the caps
@@ -90,16 +79,6 @@ const EPW_MAX_XML_BYTES = 300 * 1024 * 1024; // per country; US unzips to ~164 M
 const EPGBEST_MAX_BYTES = 100 * 1024 * 1024; // personal feed, gz or plain
 const EPGBEST_MAX_XML_BYTES = 300 * 1024 * 1024;
 
-/* Gunzip with an output cap; tags errors with the source URL like fetchBuf. */
-function gunzipCapped(gz, maxBytes, url) {
-  try {
-    return zlib.gunzipSync(gz, { maxOutputLength: maxBytes });
-  } catch (e) {
-    if (!e.url) e.url = url;
-    throw e;
-  }
-}
-
 /* Pure XML/time helpers live in lib/epg-utils.mjs (unit-tested). */
 
 const results = {};
@@ -109,7 +88,7 @@ async function adapterIptvx() {
   const rows = bySite.get("epg.iptvx.one") ?? [];
   // iptvx keys programmes by the guides' site_id (e.g. "13-strt"), not xmltv_id.
   const wanted = new Map(rows.map(([cid, m]) => [String(m.site_id), cid]));
-  const gz = await fetchBuf("https://iptvx.one/epg/epg_noarch.xml.gz", 120_000, { maxBytes: IPTVX_MAX_GZ_BYTES });
+  const gz = await fetchBuf("https://iptvx.one/epg/epg_noarch.xml.gz", TIMEOUT_MS.IPTVX, { maxBytes: IPTVX_MAX_GZ_BYTES });
   const xml = gunzipCapped(gz, IPTVX_MAX_XML_BYTES, "https://iptvx.one/epg/epg_noarch.xml.gz").toString("utf8");
   extractXmltv(xml, wanted, results, WIN_START, WIN_END);
   report.iptvx = { channels: rows.length, withData: rows.filter(([cid]) => results[cid]?.length).length, xmlMB: +(xml.length / 1e6).toFixed(1) };
@@ -131,7 +110,7 @@ async function adapterMjh() {
     while (queue.length) {
       const [path, wanted] = queue.shift();
       try {
-        const buf = await fetchBuf(`https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/${path}.xml`, 90_000, { maxBytes: MJH_MAX_XML_BYTES });
+        const buf = await fetchBuf(`https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/${path}.xml`, TIMEOUT_MS.MJH, { maxBytes: MJH_MAX_XML_BYTES });
         extractXmltv(buf.toString("utf8"), wanted, results, WIN_START, WIN_END);
         files++;
       } catch (e) {
@@ -140,7 +119,7 @@ async function adapterMjh() {
       }
     }
   }
-  await Promise.all(Array.from({ length: 6 }, worker));
+  await Promise.all(Array.from({ length: WORKERS.MJH }, worker));
   report.mjh = { channels: rows.length, files, paths: byPath.size, withData: rows.filter(([cid]) => results[cid]?.length).length, ...(failedPaths.length ? { failedPaths } : {}) };
 }
 
@@ -158,7 +137,7 @@ async function adapterMyjcom() {
     const seen = new Set();
     for (const day of days) {
       try {
-        const buf = await fetchBuf(`https://tvguide.myjcom.jp/api/getEpgInfo/?channels=${m.site_id}_${day}&rectime=&rec4k=`, 30_000);
+        const buf = await fetchBuf(`https://tvguide.myjcom.jp/api/getEpgInfo/?channels=${m.site_id}_${day}&rectime=&rec4k=`, TIMEOUT_MS.MYJCOM);
         const data = JSON.parse(buf.toString("utf8"));
         for (const items of Object.values(data)) {
           for (const it of items) {
@@ -220,7 +199,7 @@ async function adapterEpgshare() {
   // https://oracle-relay.faiqhayaza.com/catalog.json (Caddy static file,
   // DNS-only, no Cloudflare in the path); the PC catalog build publishes
   // it there on every rebuild (scripts/gen-catalog-json.mjs in tontonan).
-  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", 60_000);
+  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", TIMEOUT_MS.CATALOG);
   const catalog = JSON.parse(catBuf.toString("utf8"));
   const baseOf = (id) => String(id).split("@")[0];
   const ccOf = (s) => /\.([a-z]{2})$/i.exec(s)?.[1].toLowerCase() ?? null;
@@ -245,7 +224,7 @@ async function adapterEpgshare() {
     while (listQueue.length) {
       const region = listQueue.shift();
       try {
-        const txt = (await fetchBuf(`https://epgshare01.online/epgshare01/epg_ripper_${region}.txt`, 30_000)).toString("utf8");
+        const txt = (await fetchBuf(`https://epgshare01.online/epgshare01/epg_ripper_${region}.txt`, TIMEOUT_MS.EPGSHARE_LIST)).toString("utf8");
         for (let line of txt.split(/\r?\n/)) {
           line = line.trim();
           if (!line || /^\d+$/.test(line) || line.startsWith("--")) continue;
@@ -258,7 +237,7 @@ async function adapterEpgshare() {
       }
     }
   }
-  await Promise.all(Array.from({ length: 6 }, listWorker));
+  await Promise.all(Array.from({ length: WORKERS.EPGSHARE_LIST }, listWorker));
 
   const esStripCount = new Map();
   for (const id of esRegions.keys()) esStripCount.set(strip(id), (esStripCount.get(strip(id)) ?? 0) + 1);
@@ -303,7 +282,7 @@ async function adapterEpgshare() {
     while (dlQueue.length) {
       const [region, wanted] = dlQueue.shift();
       try {
-        const gz = await fetchBuf(`https://epgshare01.online/epgshare01/epg_ripper_${region}.xml.gz`, 180_000, { maxBytes: EPGSHARE_MAX_GZ_BYTES });
+        const gz = await fetchBuf(`https://epgshare01.online/epgshare01/epg_ripper_${region}.xml.gz`, TIMEOUT_MS.EPGSHARE_XML, { maxBytes: EPGSHARE_MAX_GZ_BYTES });
         extractXmltv(gunzipCapped(gz, EPGSHARE_MAX_XML_BYTES, `https://epgshare01.online/epgshare01/epg_ripper_${region}.xml.gz`).toString("utf8"), wanted, results, WIN_START, WIN_END);
         files++;
       } catch (e) {
@@ -312,7 +291,7 @@ async function adapterEpgshare() {
       }
     }
   }
-  await Promise.all(Array.from({ length: 3 }, dlWorker));
+  await Promise.all(Array.from({ length: WORKERS.EPGSHARE_DL }, dlWorker));
   report.epgshare = {
     channels: matched,
     files,
@@ -392,7 +371,7 @@ const EPW_COUNTRIES = (
 ).split(" ");
 
 async function adapterEpgpw() {
-  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", 60_000);
+  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", TIMEOUT_MS.CATALOG);
   const catalog = JSON.parse(catBuf.toString("utf8"));
   // Per-country name index over catalog channels (all of them; the
   // already-covered ones are filtered out at match time so they cannot
@@ -415,7 +394,7 @@ async function adapterEpgpw() {
   for (const cc of EPW_COUNTRIES) {
     const url = `https://epg.pw/xmltv/epg_${cc}.xml.gz`;
     try {
-      const gz = await fetchBuf(url, 180_000, { maxBytes: EPW_MAX_GZ_BYTES });
+      const gz = await fetchBuf(url, TIMEOUT_MS.EPW, { maxBytes: EPW_MAX_GZ_BYTES });
       const xml = gunzipCapped(gz, EPW_MAX_XML_BYTES, url).toString("utf8");
       const guideChannels = parseXmltvChannels(xml);
       const names = byCountryName.get(cc) ?? new Map();
@@ -460,12 +439,12 @@ async function adapterEpgbest() {
     report.epgbest = { skipped: "EPG_BEST_URL not set (see README)" };
     return;
   }
-  const buf = await fetchBuf(url, 180_000, { maxBytes: EPGBEST_MAX_BYTES });
+  const buf = await fetchBuf(url, TIMEOUT_MS.EPGBEST, { maxBytes: EPGBEST_MAX_BYTES });
   const xml =
     buf[0] === 0x1f && buf[1] === 0x8b
       ? gunzipCapped(buf, EPGBEST_MAX_XML_BYTES, url).toString("utf8")
       : buf.toString("utf8");
-  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", 60_000);
+  const catBuf = await fetchBuf("https://oracle-relay.faiqhayaza.com/catalog.json", TIMEOUT_MS.CATALOG);
   const catalog = JSON.parse(catBuf.toString("utf8"));
   const baseOf = (id) => String(id).split("@")[0];
   const byBase = new Map();
