@@ -35,6 +35,7 @@
 import fs from "node:fs";
 import { USER_AGENT } from "../lib/fetch.mjs";
 import { CATALOG_MIRROR_URL } from "../lib/catalog.mjs";
+import { buildMjhWanted } from "../lib/pipeline.mjs";
 
 const MATCHES_PATH = new URL("../matches.json", import.meta.url);
 
@@ -86,6 +87,12 @@ if (orphans.length) {
   for (const [site, n] of [...orphanSites.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10))
     console.log(`  ${String(n).padStart(5)}  ${site}`);
 }
+/* Duplicate mjh (path, key) rows: the builder keeps the first and the
+ * later row's channel silently loses its guide (see buildMjhWanted). */
+const { duplicates: mjhDuplicates } = buildMjhWanted(validEntries.filter(([, m]) => m.site === "i.mjh.nz"));
+console.log(`mjh duplicate (path, key) rows (later row loses its guide): ${mjhDuplicates.length}`);
+if (mjhDuplicates.length)
+  for (const d of mjhDuplicates.slice(0, 10)) console.log(`  ${d.path}#${d.key}: kept ${d.kept}, dropped ${d.dropped}`);
 
 let dropped = new Set();
 if (pruneOrphans) for (const [cid] of orphans) dropped.add(cid);

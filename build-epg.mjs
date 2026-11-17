@@ -29,11 +29,27 @@
  *                                 (secret); skipped when unset
  */
 import fs from "node:fs";
-import { extractXmltv, jstToMs, parseXmltvChannels } from "./lib/epg-utils.mjs";
+import { extractXmltv, parseXmltvChannels } from "./lib/epg-utils.mjs";
 import { fetchBuf, gunzipCapped } from "./lib/fetch.mjs";
 import { buildCatalogIndexes, buildCountryNameIndex, loadCatalog, matchEpgpwNames, resolveGuideId, stripId } from "./lib/catalog.mjs";
+import { buildMjhWanted, evaluateGate, extractMyjcomProgrammes, loadMatches, readPrevTotal } from "./lib/pipeline.mjs";
 
-const MATCHES = JSON.parse(fs.readFileSync(new URL("./matches.json", import.meta.url), "utf8"));
+/* matches.json, loaded guarded (lib/pipeline.mjs: loadMatches): a corrupt
+ * file used to throw here at import time, before any adapter ran and
+ * before build-report.json was written — the process died with a raw
+ * stack and no report, contradicting the "report is ALWAYS written"
+ * promise below. Now a bad file yields an empty map plus matchesError;
+ * the adapters run with zero rows, the gate fails on zero channels,
+ * and the report names the cause. */
+let MATCHES = {};
+let matchesError = null;
+try {
+  const loaded = loadMatches(fs.readFileSync(new URL("./matches.json", import.meta.url), "utf8"));
+  MATCHES = loaded.matches;
+  matchesError = loaded.error;
+} catch (e) {
+  matchesError = `matches.json could not be read: ${e.message}`;
+}
 const NOW = Date.now();
 const WIN_START = NOW - 3 * 3600_000;
 const WIN_END = NOW + 16 * 3600_000;
@@ -81,6 +97,12 @@ const EPGBEST_MAX_XML_BYTES = 300 * 1024 * 1024;
 
 /* Pure XML/time helpers live in lib/epg-utils.mjs (unit-tested). */
 
+/* What "channels" means in every adapter's report entry (S7): the
+ * number of channels this adapter ATTEMPTED — rows in matches.json for
+ * the site adapters (iptvx/mjh/myjcom); matched catalog channels for
+ * the generic adapters (epgshare/epgpw/epgbest); the guide's wanted
+ * channels for iptvorg. One definition everywhere, so the numbers are
+ * comparable across adapters and a future gate rule can read them. */
 const results = {};
 const report = {};
 
@@ -91,18 +113,14 @@ async function adapterIptvx() {
   const gz = await fetchBuf("https://iptvx.one/epg/epg_noarch.xml.gz", TIMEOUT_MS.IPTVX, { maxBytes: IPTVX_MAX_GZ_BYTES });
   const xml = gunzipCapped(gz, IPTVX_MAX_XML_BYTES, "https://iptvx.one/epg/epg_noarch.xml.gz").toString("utf8");
   extractXmltv(xml, wanted, results, WIN_START, WIN_END);
-  report.iptvx = { channels: rows.length, withData: rows.filter(([cid]) => results[cid]?.length).length, xmlMB: +(xml.length / 1e6).toFixed(1) };
+  report.iptvx = { channels: rows.length, withData: rows.filter(([cid]) => results[cid]?.length).length, xmlMB: +(Buffer.byteLength(xml, "utf8") / 1e6).toFixed(1) };
 }
 
 async function adapterMjh() {
   const rows = bySite.get("i.mjh.nz") ?? [];
-  const byPath = new Map();
-  for (const [cid, m] of rows) {
-    const [path, key] = String(m.site_id).split("#");
-    if (!byPath.has(path)) byPath.set(path, new Map());
-    // Inside the file, programmes are keyed by the part after '#' when present.
-    byPath.get(path).set(key ?? m.xmltv_id, cid);
-  }
+  // Inside each file, programmes are keyed by the part after '#' when
+  // present, else by xmltv_id (see lib/pipeline.mjs: buildMjhWanted).
+  const { byPath, duplicates } = buildMjhWanted(rows);
   let files = 0;
   const failedPaths = [];
   const queue = [...byPath.entries()];
@@ -120,7 +138,7 @@ async function adapterMjh() {
     }
   }
   await Promise.all(Array.from({ length: WORKERS.MJH }, worker));
-  report.mjh = { channels: rows.length, files, paths: byPath.size, withData: rows.filter(([cid]) => results[cid]?.length).length, ...(failedPaths.length ? { failedPaths } : {}) };
+  report.mjh = { channels: rows.length, files, paths: byPath.size, withData: rows.filter(([cid]) => results[cid]?.length).length, ...(failedPaths.length ? { failedPaths } : {}), ...(duplicates.length ? { duplicateKeys: duplicates } : {}) };
 }
 
 /* myjcom: programStart/programEnd are JST wall-clock "YYYYMMDDHHmmss" (see jstToMs). */
@@ -139,22 +157,12 @@ async function adapterMyjcom() {
       try {
         const buf = await fetchBuf(`https://tvguide.myjcom.jp/api/getEpgInfo/?channels=${m.site_id}_${day}&rectime=&rec4k=`, TIMEOUT_MS.MYJCOM);
         const data = JSON.parse(buf.toString("utf8"));
-        for (const items of Object.values(data)) {
-          for (const it of items) {
-            const start = jstToMs(it.programStart);
-            const end = jstToMs(it.programEnd);
-            // jstToMs yields NaN for a malformed programStart/programEnd;
-            // NaN passes every comparison, so without the finite check a
-            // bad upstream value would land in epg.json as [null, null,
-            // title]. Zero-length/inverted entries are skipped like in
-            // extractXmltv (same upstream placeholder slots).
-            if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || end <= WIN_START || start >= WIN_END || seen.has(start)) continue;
-            seen.add(start);
-            const title = String(it.title ?? "").trim();
-            if (!title) continue; // don't publish empty-title programme entries
-            (results[cid] ??= []).push([start, end, title]);
-          }
-        }
+        // Shape-validated extraction (lib/pipeline.mjs): an error-shaped
+        // API response is recorded as a failure, not silently read as
+        // zero programmes.
+        const { programmes, errors } = extractMyjcomProgrammes(data, { winStart: WIN_START, winEnd: WIN_END, seen });
+        if (errors.length) failed.push({ channel: cid, day, error: errors.join("; ") });
+        if (programmes.length) (results[cid] ??= []).push(...programmes);
       } catch (e) {
         console.error(`myjcom ${cid} ${day}: ${e.message}`);
         failed.push({ channel: cid, day, error: e.message, url: e.url ?? null });
@@ -315,8 +323,11 @@ async function adapterIptvorg() {
     report.iptvorg = { skipped: "iptvorg-guide.xml not present (grab produced nothing)" };
     return;
   }
-  if (guide.length > IPTVORG_MAX_XML_BYTES) {
-    report.iptvorg = { error: `guide.xml ${guide.length} bytes exceeds cap ${IPTVORG_MAX_XML_BYTES}` };
+  // Byte length, not string length: guide.length counts UTF-16 code
+  // units, which under-enforces the byte cap for multibyte titles.
+  const guideBytes = Buffer.byteLength(guide, "utf8");
+  if (guideBytes > IPTVORG_MAX_XML_BYTES) {
+    report.iptvorg = { error: `guide.xml ${guideBytes} bytes exceeds cap ${IPTVORG_MAX_XML_BYTES}` };
     return;
   }
   const wanted = new Map();
@@ -328,7 +339,7 @@ async function adapterIptvorg() {
   report.iptvorg = {
     channels: wanted.size,
     withData: [...wanted.values()].filter((cid) => results[cid]?.length).length,
-    guideKB: +(guide.length / 1024).toFixed(0),
+    guideKB: +(guideBytes / 1024).toFixed(0),
   };
 }
 
@@ -446,38 +457,38 @@ for (const list of Object.values(results)) list.sort((a, b) => a[0] - b[0]);
 const total = Object.keys(results).length;
 const out = { v: 1, generatedAt: NOW, channels: results };
 
-/* Failure gate: a degraded build must never overwrite the last good
- * epg.json. The previous committed build-report.json is the baseline.
- * The report is ALWAYS written (so a failure is visible in the repo);
- * epg.json is written only when the gate passes, and the process exits
- * non-zero so the workflow fails and GitHub notifies. Rules:
- *   - zero channels with data -> fail
- *   - channelsWithData down >25% vs the previous build -> fail
- * (The Nov 2026 epgshare outage halved output to ~1,000 from ~1,900
- * for 2 days while the workflow stayed green and kept committing the
- * degraded file. Either rule would have stopped it at the first build.) */
+/* Failure gate (rules + boundary tests in lib/pipeline.mjs): a
+ * degraded build must never overwrite the last good epg.json. The
+ * previous committed build-report.json is the baseline. The report is
+ * ALWAYS written (so a failure is visible in the repo); epg.json is
+ * written only when the gate passes, and the process exits non-zero so
+ * the workflow fails and GitHub notifies. */
 let prevTotal = null;
 try {
-  const prev = JSON.parse(fs.readFileSync(new URL("./build-report.json", import.meta.url), "utf8"));
-  if (Number.isFinite(prev.channelsWithData)) prevTotal = prev.channelsWithData;
+  prevTotal = readPrevTotal(fs.readFileSync(new URL("./build-report.json", import.meta.url), "utf8"));
 } catch {
   // First build, or a missing/corrupt report: no baseline, but the
   // absolute floor (total === 0) still applies.
 }
-const gateReasons = [];
-if (total === 0) gateReasons.push("no channels with data");
-if (prevTotal !== null && total < prevTotal * 0.75)
-  gateReasons.push(`channelsWithData fell ${prevTotal} -> ${total} (more than 25% down vs previous build)`);
-const gate = { prevChannelsWithData: prevTotal, pass: gateReasons.length === 0, ...(gateReasons.length ? { reasons: gateReasons } : {}) };
+const gate = evaluateGate(total, prevTotal);
+if (matchesError) {
+  // A corrupt matches.json fails the build on its own: with no map,
+  // total is 0 and the gate already fails, but say why in the report.
+  gate.reasons = [...(gate.reasons ?? []), `matches.json could not be loaded: ${matchesError}`];
+  gate.pass = false;
+}
+const gateReasons = gate.reasons ?? [];
 
 fs.writeFileSync(
   new URL("./build-report.json", import.meta.url),
-  JSON.stringify({ generatedAt: NOW, adapters: report, channelsWithData: total, gate }, null, 2),
+  JSON.stringify({ generatedAt: NOW, adapters: report, channelsWithData: total, gate, ...(matchesError ? { matchesError } : {}) }, null, 2),
 );
 if (!gate.pass) {
   console.error(`GATE FAILED (${gateReasons.join("; ")}): epg.json NOT overwritten, keeping last good build`);
   process.exitCode = 1;
 } else {
-  fs.writeFileSync(new URL("./epg.json", import.meta.url), JSON.stringify(out));
-  console.log(`epg.json written: ${total} channels with data, ${(JSON.stringify(out).length / 1024).toFixed(0)} KiB`);
+  // Serialize once: the string is both the file and the size log.
+  const outJson = JSON.stringify(out);
+  fs.writeFileSync(new URL("./epg.json", import.meta.url), outJson);
+  console.log(`epg.json written: ${total} channels with data, ${(outJson.length / 1024).toFixed(0)} KiB`);
 }

@@ -20,6 +20,7 @@ const repoRoot = new URL("..", import.meta.url).pathname;
  * number), an orphan (site with no adapter), and two valid rows. */
 const FIXTURE = {
   "GoodOne.uk@HD": { site: "i.mjh.nz", site_id: "UK/all#good", xmltv_id: "GoodOne.uk" },
+  "DupOne.uk": { site: "i.mjh.nz", site_id: "UK/all#good", xmltv_id: "DupOne.uk" },
   "GoodTwo.us@SD": { site: "epg.iptvx.one", site_id: "13-strt", xmltv_id: "GoodTwo.us" },
   "NullEntry.uk": null,
   "BadSite.uk": { site: 123, site_id: "x", xmltv_id: "BadSite.uk" },
@@ -31,9 +32,10 @@ function stageFixture() {
   fs.mkdirSync(path.join(dir, "scripts"));
   fs.mkdirSync(path.join(dir, "lib"));
   fs.copyFileSync(path.join(repoRoot, "scripts/regenerate-matches.mjs"), path.join(dir, "scripts/regenerate-matches.mjs"));
-  // The script's imports (lib/fetch.mjs, lib/catalog.mjs) and their
-  // own imports (lib/epg-utils.mjs) must all be staged.
-  for (const f of ["fetch.mjs", "catalog.mjs", "epg-utils.mjs"])
+  // The script's imports (lib/fetch.mjs, lib/catalog.mjs,
+  // lib/pipeline.mjs) and their own imports (lib/epg-utils.mjs) must
+  // all be staged.
+  for (const f of ["fetch.mjs", "catalog.mjs", "pipeline.mjs", "epg-utils.mjs"])
     fs.copyFileSync(path.join(repoRoot, "lib", f), path.join(dir, "lib", f));
   fs.writeFileSync(path.join(dir, "matches.json"), JSON.stringify(FIXTURE, null, 2));
   return dir;
@@ -44,10 +46,12 @@ describe("regenerate-matches.mjs", () => {
     const dir = stageFixture();
     try {
       const { stdout } = await run(process.execPath, ["scripts/regenerate-matches.mjs"], { cwd: dir });
-      assert.match(stdout, /matches\.json: 5 entries across 3 sites/);
+      assert.match(stdout, /matches\.json: 6 entries across 3 sites/);
       assert.match(stdout, /malformed entries \(missing site\/site_id\/xmltv_id\): 2/);
       assert.match(stdout, /NullEntry\.uk/);
       assert.match(stdout, /orphan entries \(site has no adapter\): 1/);
+      assert.match(stdout, /mjh duplicate \(path, key\) rows \(later row loses its guide\): 1/);
+      assert.match(stdout, /UK\/all#good: kept GoodOne\.uk@HD, dropped DupOne\.uk/);
       assert.doesNotMatch(stdout, /TypeError/);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -58,7 +62,7 @@ describe("regenerate-matches.mjs", () => {
     const dir = stageFixture();
     try {
       const { stdout } = await run(process.execPath, ["scripts/regenerate-matches.mjs", "--prune-orphans", "--dry-run"], { cwd: dir });
-      assert.match(stdout, /would drop 1 entries \(5 -> 4\)/);
+      assert.match(stdout, /would drop 1 entries \(6 -> 5\)/);
       // Dry run must not touch the file.
       assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, "matches.json"), "utf8")), FIXTURE);
     } finally {
