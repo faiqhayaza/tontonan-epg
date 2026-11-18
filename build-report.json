@@ -1,26 +1,26 @@
 {
-  "generatedAt": 1794963989157,
+  "generatedAt": 1795003226233,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 331,
-      "xmlMB": 425.7
+      "withData": 334,
+      "xmlMB": 440.9
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 641,
+      "withData": 647,
       "failedPaths": [
-        {
-          "path": "Roku/all",
-          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
-          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
-        },
         {
           "path": "Flash/epg",
           "error": "HTTP 404 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml"
+        },
+        {
+          "path": "Roku/all",
+          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
         },
         {
           "path": "SkyGo/epg",
@@ -35,18 +35,18 @@
     },
     "epgshare": {
       "channels": 1037,
-      "files": 58,
-      "regions": 58,
-      "withData": 918,
+      "files": 59,
+      "regions": 59,
+      "withData": 914,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1374,
-      "withData": 751,
-      "guideKB": 10033
+      "channels": 1420,
+      "withData": 779,
+      "guideKB": 20924
     },
     "epgpw": {
-      "channels": 433,
+      "channels": 426,
       "files": 20,
       "withData": 416
     },
@@ -54,9 +54,9 @@
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3062,
+  "channelsWithData": 3095,
   "gate": {
-    "prevChannelsWithData": 3070,
+    "prevChannelsWithData": 3062,
     "pass": true
   }
 }
