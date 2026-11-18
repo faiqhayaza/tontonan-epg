@@ -1,7 +1,8 @@
 /**
  * Unit tests for lib/fetch.mjs: the streaming byte cap, the transient
  * retry, and gunzipCapped. All against a local HTTP server — no
- * upstream, no network.
+ * upstream, no network. (The timeout/abort retry path is in
+ * test/fetch-retry-oe7.test.mjs.)
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -85,7 +86,7 @@ describe("fetchBuf against a local server", () => {
     await new Promise((r) => server.close(r));
   });
 
-  it("returns a small body intact, tagged with no error", async () => {
+  it("returns a small 200 body intact, byte for byte", async () => {
     const buf = await fetchBuf(`${base}/small`, 5000, { maxBytes: 1024 });
     assert.equal(buf.toString("utf8"), "hello world");
   });

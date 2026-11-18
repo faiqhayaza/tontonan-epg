@@ -21,8 +21,13 @@ const files = [
 for (const f of files) {
   try {
     await run(process.execPath, ["--check", f], { cwd: root });
-  } catch {
+  } catch (e) {
     console.error(`node --check failed: ${f}`);
+    // node's own diagnostic (file:line, the offending source line, the
+    // SyntaxError message) is on the child's stderr (E9: it used to be
+    // thrown away, leaving only the file name). Fall back to the error
+    // message when there is no stderr (e.g. node itself failed to start).
+    console.error(String(e.stderr ?? "").trim() || e.message);
     process.exit(1);
   }
 }

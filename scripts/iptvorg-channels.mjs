@@ -55,8 +55,7 @@
  *     [--max-channels N]
  */
 import fs from "node:fs";
-import { USER_AGENT } from "../lib/fetch.mjs";
-import { CATALOG_MIRROR_URL } from "../lib/catalog.mjs";
+import { CATALOG_MIRROR_URL, loadCatalog, parseCatalog } from "../lib/catalog.mjs";
 import {
   buildCatByBase,
   buildNameIndex,
@@ -83,15 +82,15 @@ const MAX_CHANNELS = parseMaxChannels(opt("--max-channels", "2500"));
 /* Sites with a dedicated adapter in build-epg.mjs — never grab them here. */
 const EXCLUDED_SITES = new Set(["i.mjh.nz", "epg.iptvx.one", "tvguide.myjcom.jp", "epgshare01.online"]);
 
-async function loadCatalog() {
-  if (/^https?:\/\//.test(CATALOG)) {
-    // Same 60 s timeout discipline as build-epg.mjs's fetchBuf: without
-    // one, a hung mirror fetch hangs this step until the job timeout.
-    const r = await fetch(CATALOG, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(60_000) });
-    if (!r.ok) throw new Error(`catalog fetch failed: HTTP ${r.status} (${CATALOG})`);
-    return r.json();
-  }
-  return JSON.parse(fs.readFileSync(CATALOG, "utf8"));
+/* The catalog, through the shared path in lib/catalog.mjs (E4): a URL
+ * goes through loadCatalog (fetchBuf's timeout, transient retry and
+ * User-Agent), a local path through parseCatalog — and both refuse a
+ * document with no channels array. The inline fetch() + r.json() this
+ * replaces accepted a 200 with `{}` and wrote an EMPTY grab list
+ * without a word. */
+async function readCatalog() {
+  if (/^https?:\/\//.test(CATALOG)) return loadCatalog(CATALOG);
+  return parseCatalog(fs.readFileSync(CATALOG, "utf8"));
 }
 
 /* Missing file (first run) -> null. A file that exists but is corrupt
@@ -108,7 +107,7 @@ function loadJsonOrEmpty(path) {
   }
 }
 
-const catalog = await loadCatalog();
+const catalog = await readCatalog();
 const prevEpg = loadJsonOrEmpty(EPG_PATH);
 const covered = new Set(Object.keys(prevEpg?.channels ?? {}));
 const matches = loadJsonOrEmpty(MATCHES_PATH) ?? {};
@@ -121,22 +120,30 @@ const byName = buildNameIndex(uncovered);
 const siteDirs = fs.readdirSync(SITES_DIR, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
 const idMatches = []; // {site, site_id, lang, xmltv_id(base), name}
 const nameMatches = [];
-const siteYield = new Map(); // site -> {id, name}
-for (const site of siteDirs) {
-  if (EXCLUDED_SITES.has(site)) continue;
-  const files = fs.readdirSync(`${SITES_DIR}/${site}`).filter((f) => f.endsWith(".channels.xml"));
+/* Yield per SITE ATTRIBUTE (O-E4), not per directory name: the entries
+ * written to the grab list carry e.site, and compareEntries looks the
+ * yield up by entry.site — keying this map by the directory name made
+ * every lookup miss whenever the two differ (latent in iptv-org data,
+ * where they normally agree), silently dropping the yield ordering. */
+const siteYield = new Map(); // site attribute -> {id, name}
+for (const dir of siteDirs) {
+  if (EXCLUDED_SITES.has(dir)) continue;
+  const files = fs.readdirSync(`${SITES_DIR}/${dir}`).filter((f) => f.endsWith(".channels.xml"));
   for (const f of files) {
-    const xml = fs.readFileSync(`${SITES_DIR}/${site}/${f}`, "utf8");
+    const xml = fs.readFileSync(`${SITES_DIR}/${dir}/${f}`, "utf8");
     for (const e of parseEntries(xml)) {
+      // e.site is required here, so it is the entry's site — there is
+      // no directory-name fallback to fall back to.
       if (!e.site || !e.site_id || !e.name) continue;
-      const y = siteYield.get(site) ?? { id: 0, name: 0 };
+      if (EXCLUDED_SITES.has(e.site)) continue;
+      const y = siteYield.get(e.site) ?? { id: 0, name: 0 };
       const hit = matchEntry(e, uncovered, byName);
       if (hit) {
-        const entry = { site: e.site || site, site_id: e.site_id, lang: e.lang, xmltv_id: hit.xmltv_id, name: e.name };
+        const entry = { site: e.site, site_id: e.site_id, lang: e.lang, xmltv_id: hit.xmltv_id, name: e.name };
         (hit.kind === "id" ? idMatches : nameMatches).push(entry);
         y[hit.kind]++;
       }
-      siteYield.set(site, y);
+      siteYield.set(e.site, y);
     }
   }
 }
@@ -159,7 +166,7 @@ const map = {
   catalogGeneratedAt: catalog.generatedAt ?? null,
   channels: Object.fromEntries(final.map((e) => [e.xmltv_id, catByBase.get(e.xmltv_id)[0].id])),
   stats: {
-    catalogChannels: (catalog.channels ?? []).length,
+    catalogChannels: catalog.channels.length,
     uncoveredBases: uncovered.size,
     idMatches: idMatches.length,
     nameMatches: nameMatches.length,

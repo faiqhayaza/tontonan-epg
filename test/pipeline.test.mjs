@@ -6,7 +6,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildMjhWanted, evaluateGate, extractMyjcomProgrammes, loadMatches, readPrevTotal } from "../lib/pipeline.mjs";
+import { buildMjhWanted, evaluateGate, extractMyjcomProgrammes, loadMatches, nextLastGood, OVERLAP_THRESHOLD, readGateBaseline, scanGateReasons, scanSchedules } from "../lib/pipeline.mjs";
 
 describe("evaluateGate", () => {
   it("fails on zero channels even with no baseline", () => {
@@ -25,18 +25,89 @@ describe("evaluateGate", () => {
     assert.equal(evaluateGate(2250, 3000).pass, true);
     const g = evaluateGate(2249, 3000);
     assert.equal(g.pass, false);
-    assert.deepEqual(g.reasons, ["channelsWithData fell 3000 -> 2249 (more than 25% down vs previous build)"]);
+    // The baseline is the last build that passed the gate (E1), which is
+    // not necessarily the previous build; the reason says so.
+    assert.deepEqual(g.reasons, ["channelsWithData fell 3000 -> 2249 (more than 25% down vs the last build that passed the gate)"]);
     assert.equal(evaluateGate(1500, 3000).pass, false);
   });
 });
 
-describe("readPrevTotal", () => {
-  it("reads the baseline, or null when there is none", () => {
-    assert.equal(readPrevTotal('{"channelsWithData": 3030}'), 3030);
-    assert.equal(readPrevTotal('{"channelsWithData": "3030"}'), null);
-    assert.equal(readPrevTotal('{"gate": {}}'), null);
-    assert.equal(readPrevTotal("{corrupt"), null);
-    assert.equal(readPrevTotal(""), null);
+describe("readGateBaseline / nextLastGood (E1)", () => {
+  it("prefers lastGoodChannelsWithData, falls back to channelsWithData for old reports", () => {
+    // A gated report: channelsWithData is the degraded count, the
+    // baseline is the last good one.
+    assert.equal(readGateBaseline('{"channelsWithData": 1000, "lastGoodChannelsWithData": 3000}'), 3000);
+    // Pre-E1 report (no field): its channelsWithData.
+    assert.equal(readGateBaseline('{"channelsWithData": 3067}'), 3067);
+    // Field present but null/non-numeric: no known-good build yet; do
+    // NOT fall back to the (possibly gated) channelsWithData.
+    assert.equal(readGateBaseline('{"channelsWithData": 1000, "lastGoodChannelsWithData": null}'), null);
+    assert.equal(readGateBaseline('{"channelsWithData": 1000, "lastGoodChannelsWithData": "3000"}'), null);
+    // No count at all, missing / corrupt / non-object: null.
+    assert.equal(readGateBaseline('{"gate": {}}'), null);
+    assert.equal(readGateBaseline(""), null);
+    assert.equal(readGateBaseline("{corrupt"), null);
+    assert.equal(readGateBaseline("null"), null);
+    assert.equal(readGateBaseline("[3000]"), null);
+    assert.equal(readGateBaseline('{"channelsWithData": "3030"}'), null);
+  });
+
+  it("advances only on a passing gate, else carries the baseline forward", () => {
+    assert.equal(nextLastGood(true, 2500, 3000), 2500);
+    assert.equal(nextLastGood(false, 1000, 3000), 3000);
+    assert.equal(nextLastGood(false, 1000, null), null);
+    assert.equal(nextLastGood(true, 100, null), 100);
+  });
+
+  it("pure two-run sequence: 3000 -> 1000 gated, then 1000 again still gated", () => {
+    let report = JSON.stringify({ channelsWithData: 3000 });
+    for (const run of [1, 2]) {
+      const baseline = readGateBaseline(report);
+      const gate = evaluateGate(1000, baseline);
+      assert.equal(gate.pass, false, `run ${run}`);
+      report = JSON.stringify({ channelsWithData: 1000, lastGoodChannelsWithData: nextLastGood(gate.pass, 1000, baseline), gate });
+    }
+    assert.equal(JSON.parse(report).lastGoodChannelsWithData, 3000);
+  });
+});
+
+describe("scanSchedules / scanGateReasons (E-new)", () => {
+  const H = 3600_000;
+
+  it("counts overlaps per channel, largest first; back-to-back is not an overlap", () => {
+    const scan = scanSchedules({
+      ok: [[0, H, "a"], [H, 2 * H, "b"]],
+      one: [[0, 2 * H, "a"], [H, 3 * H, "b"]],
+      // Two schedules appended into one list (unsorted input): every
+      // programme of the second starts before the running max end.
+      merged: [[0, H, "a1"], [H, 2 * H, "a2"], [H / 2, 3 * H / 2, "b1"], [3 * H / 2, 5 * H / 2, "b2"]],
+    });
+    // merged, in start order: a1 [0,1h], b1 [0.5h,1.5h], a2 [1h,2h],
+    // b2 [1.5h,2.5h] — b1, a2 and b2 each start before the running max end.
+    assert.equal(scan.overlaps, 4);
+    assert.equal(scan.overlapChannels, 2);
+    assert.equal(scan.zeroLength, 0);
+    assert.deepEqual(Object.entries(scan.perChannel), [["merged", 3], ["one", 1]]);
+    assert.deepEqual(scanGateReasons(scan), [`4 overlapping programmes across 2 channels (threshold ${OVERLAP_THRESHOLD})`]);
+  });
+
+  it("counts a duplicate slot as an overlap", () => {
+    assert.equal(scanSchedules({ d: [[0, H, "x"], [0, H, "x"]] }).overlaps, 1);
+  });
+
+  it("counts zero-length, inverted and non-finite entries, and fails the gate on them", () => {
+    const scan = scanSchedules({ z: [[0, 0, "zero"], [2 * H, H, "inverted"], [NaN, H, "nan"]], ok: [[0, H, "a"]] });
+    assert.equal(scan.zeroLength, 3);
+    assert.ok(scanGateReasons(scan).includes("3 zero-length or inverted programmes"));
+  });
+
+  it("a clean map yields no reasons, and the input is not mutated", () => {
+    const list = [[H, 2 * H, "b"], [0, H, "a"]];
+    const scan = scanSchedules({ c: list });
+    assert.deepEqual(scan, { overlaps: 0, overlapChannels: 0, zeroLength: 0, perChannel: {} });
+    assert.deepEqual(scanGateReasons(scan), []);
+    assert.deepEqual(list[0], [H, 2 * H, "b"]);
+    assert.deepEqual(scanSchedules({}), { overlaps: 0, overlapChannels: 0, zeroLength: 0, perChannel: {} });
   });
 });
 

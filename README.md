@@ -33,17 +33,24 @@ Sources (guide availability data: [iptv-org](https://github.com/iptv-org/databas
   effort: a grab failure only skips that adapter for one build.
 - `epg.pw` per-country XMLTV files (20 countries, daily) — matched to
   the catalog by display-name, since its channel ids are opaque numbers;
-  only unique in-country name matches are accepted
+  a name is accepted only when it is unique on both sides (one catalog
+  channel in the country, and one guide id in the file — "BBC One" and
+  "BBC One HD" both normalize to "bbcone", so neither maps)
 - `epg.best` personal XMLTV feed — read from the `EPG_BEST_URL`
   environment variable (a repo secret in the workflow). epg.best issues
   the feed URL per (free) account, so there is no public URL to fetch;
   the adapter skips cleanly when the variable is unset. To enable it,
   register at https://epg.best/, copy the personal EPG URL, and set it
   as the `EPG_BEST_URL` repository secret. No account is created by
-  this repo.
+  this repo. The URL is a secret: its fetch errors are recorded in
+  `build-report.json` under the label `epgbest feed (EPG_BEST_URL)`,
+  never the URL itself (the full URL goes to the workflow log only).
 
 `matches.json` maps catalog channel ids to guide sources. Each source is
 failure-isolated: if one is down, only its channels are missing from that build.
+Each catalog channel takes its schedule from ONE upstream guide id: the
+generic adapters keep a claimed set, so a second guide id resolving to an
+already-claimed channel is skipped, never appended.
 
 ## Running locally
 
@@ -61,23 +68,54 @@ you run the grabber yourself — see `scripts/iptvorg-channels.mjs`) and
 the `epgbest` adapter (no `EPG_BEST_URL`); the other adapters run as
 in the workflow.
 
+`iptvorg.channels.json` and `iptvorg.channels.xml` are committed: the
+workflow commits them on every run as the audit trail of what the
+grabber was asked to fetch, and they stay committed (decision of
+2026-11-18). Consequences: a CI
+checkout always has `iptvorg.channels.json`, so the adapter's
+"`iptvorg.channels.json` not present (grab step did not run)" skip is
+reachable only locally or in a clone without the file — in CI a failed
+clone or grab shows up as "`iptvorg-guide.xml` not present (grab step
+did not run or produced nothing)"; and if the generate step fails, the
+grab runs on the previous run's committed list.
+
 ## Failure gate
 
 The build is gated: it fails (non-zero exit, workflow fails, GitHub
 notifies) and does NOT overwrite `epg.json` when it produces zero
-channels with data, or more than 25% fewer than the previous build.
-`build-report.json` is always written, so a gated build still leaves
-its report (with the failing URL and gate reason) in the repo. This
-gate exists because in November 2026 the epgshare outage halved output
-to ~1,000 channels for two days while the workflow stayed green and
-kept committing the degraded file.
+channels with data, more than 25% fewer than the last build that
+passed the gate, any overlapping programmes on a channel, or any
+zero-length/inverted programme. The baseline is
+`lastGoodChannelsWithData` from the previous `build-report.json`, which
+only advances when the gate passes — so a gated (degraded) build never
+becomes the next build's baseline. The flip side: a drop that is real
+and permanent (an upstream gone for good) keeps failing the gate until
+the baseline is reset by hand — set `lastGoodChannelsWithData` in
+`build-report.json` to the new expected count (or to `null`, which
+leaves only the zero-channel rule for the next build) and commit it.
+`build-report.json` is written on
+every run that reaches the end of the build — including a gated build
+and one that hits the build's own overall deadline (50 minutes by
+default, `EPG_BUILD_DEADLINE_MS` to override: the adapter running at
+the deadline is abandoned, the later ones are recorded as not run, and
+the gate fails) — so a failed build still leaves its report (with the
+failing URL and gate reason) in the repo. The one case with no report
+is a run killed from outside: the workflow's 90-minute job timeout
+(the deadline keeps the build itself inside it; the timeout only bites
+if the clone/grab steps before the build overrun) or a dead runner.
+The worst case without the deadline — every fetch timing out and being
+retried — is ~385 minutes (the per-leg sum is in `build-epg.mjs`,
+`TIMEOUT_MS`). This gate exists because in November 2026
+the epgshare outage halved output to ~1,000 channels for two days while
+the workflow stayed green and kept committing the degraded file.
 
 ## When an adapter fails
 
 Read `build-report.json` — a failed adapter is recorded there with its
 error message and, for fetch failures, the URL that failed (each fetch
 is tagged with its URL, so a repeat of the November 2026 epgshare
-incident is diagnosable from the report alone). Per-file failures are
+incident is diagnosable from the report alone; the secret epg.best URL
+is the one exception, recorded by label). Per-file failures are
 also printed to the workflow log (`console.error`). The failure gate
 above decides whether a degraded build may overwrite `epg.json`.
 
@@ -86,8 +124,8 @@ every build. `Flash/epg` 404s upstream, so the 9 channels mapped to it
 (CNN, MSNBC, NBC News NOW, …) have no guide data until matthuisman's repo
 restores it or the entries are remapped. `Roku/all` (~37 MB) and
 `SkyGo/epg` (~69 MB) exceed the 20 MB per-file cap, so their 38 channels
-have no guide data; the cap is Faiq's call, so this stays as documented
-loss rather than a fix.
+have no guide data; raising the cap is a repo-owner decision, so this
+stays as documented loss rather than a fix.
 
 ## matches.json
 
@@ -107,6 +145,12 @@ node scripts/regenerate-matches.mjs --prune-orphans       # drops orphans, backs
 node scripts/regenerate-matches.mjs --prune-stale         # drops channels no longer in the live catalog
 ```
 
+`--prune-stale` (and `scripts/iptvorg-channels.mjs`) load the catalog
+through `lib/catalog.mjs`, which refuses a catalog with no `channels`
+array, and `--prune-stale` refuses to drop more than half of the
+entries unless `--force` is given — a broken catalog cannot empty
+`matches.json`.
+
 Review the git diff before committing a prune. There is no way to
 re-derive `matches.json` from a single upstream index any more (iptv-org
 restructured its database to CSVs and per-site configs), so the script
@@ -122,22 +166,59 @@ Per-build adapter stats, committed alongside `epg.json`. `channels` is
 the number of channels the adapter attempted (matches.json rows for
 iptvx/mjh/myjcom; matched catalog channels for epgshare/epgpw/epgbest;
 the guide's wanted channels for iptvorg) — one definition everywhere,
-so the per-adapter numbers are comparable. Example from the real
-2026-11-16 build (numbers move a little from build to build as
-upstreams change; the per-adapter `withData` figures always sum to
-`channelsWithData`):
+so the per-adapter numbers are comparable; the per-adapter `withData`
+figures sum to `channelsWithData`.
+
+Example, in the current report shape. The `generatedAt`, `adapters`,
+`channelsWithData` and `gate` values are the real committed report of
+the 2026-11-16 build (`generatedAt` 1794858367826), excerpted: two of
+mjh's three `failedPaths` entries (`Flash/epg` 404, `SkyGo/epg` over
+the cap) are left out for length. That build predates
+`lastGoodChannelsWithData` and `scan`, so those two fields are shown
+as a build that passes today's gate records them — the gate passed, so
+the last-good count is this run's count, and a passing build's scan is
+necessarily all zero (any overlap fails the gate):
 
 ```json
-{ "generatedAt": 0,
-  "adapters": { "iptvx":   { "channels": 343, "withData": 326, "xmlMB": 368.3 },
-                "mjh":     { "channels": 787, "files": 24, "paths": 27, "withData": 637 },
-                "myjcom":  { "channels": 5, "withData": 5 },
-                "epgshare":{ "channels": 1038, "files": 58, "regions": 58, "withData": 923 },
-                "iptvorg": { "channels": 1411, "guideKB": 21272, "withData": 722 },
-                "epgpw":   { "channels": 429, "files": 20, "withData": 412 },
-                "epgbest": { "skipped": "EPG_BEST_URL not set (see README)" } },
-  "channelsWithData": 3025
+{
+  "generatedAt": 1794858367826,
+  "adapters": {
+    "iptvx": { "channels": 343, "withData": 334, "xmlMB": 262.7 },
+    "mjh": {
+      "channels": 787, "files": 24, "paths": 27, "withData": 649,
+      "failedPaths": [
+        {
+          "path": "Roku/all",
+          "error": "downloaded 37521702 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
+        }
+      ]
+    },
+    "myjcom": { "channels": 5, "withData": 5 },
+    "epgshare": { "channels": 1037, "files": 59, "regions": 59, "withData": 910, "catalogGeneratedAt": "2026-11-12T02:03:21.745Z" },
+    "iptvorg": { "channels": 1378, "withData": 752, "guideKB": 9672 },
+    "epgpw": { "channels": 433, "files": 20, "withData": 417 },
+    "epgbest": { "skipped": "EPG_BEST_URL not set (see README)" }
+  },
+  "channelsWithData": 3067,
+  "lastGoodChannelsWithData": 3067,
+  "gate": { "prevChannelsWithData": 3025, "pass": true },
+  "scan": { "overlaps": 0, "overlapChannels": 0, "zeroLength": 0, "perChannel": {} }
+}
 ```
+
+- `lastGoodChannelsWithData` — the gate's baseline for the next build:
+  this run's count when the gate passed, else carried forward from the
+  previous report.
+- `gate` — `{ prevChannelsWithData, pass }` plus `reasons` (a list of
+  strings) when it failed. `prevChannelsWithData` is the baseline the
+  gate compared against: the previous report's
+  `lastGoodChannelsWithData`, not necessarily the previous build's count.
+- `scan` — `{ overlaps, overlapChannels, zeroLength, perChannel }`, the
+  schedule scan of the final `epg.json` map (`perChannel` lists overlap
+  counts per channel, largest first).
+- `matchesError` — present only when `matches.json` could not be
+  loaded (its text is also one of the gate's `reasons`).
 
 ## License
 

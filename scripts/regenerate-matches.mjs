@@ -17,10 +17,11 @@
  *       show which entries would be dropped (sites with no adapter)
  *   node scripts/regenerate-matches.mjs --prune-orphans
  *       drop orphan entries (backs up to matches.json.bak first)
- *   node scripts/regenerate-matches.mjs --prune-stale
+ *   node scripts/regenerate-matches.mjs --prune-stale [--dry-run] [--force]
  *       drop entries whose channel id is no longer in the live catalog
  *       (fetches the A1 mirror of catalog.json — the site's own
- *       catalog.json 403s from automation, see build-epg.mjs)
+ *       catalog.json 403s from automation, see build-epg.mjs). Refuses
+ *       to drop more than half of the entries unless --force is given.
  *
  *   node scripts/regenerate-matches.mjs --help
  *       print this usage and exit
@@ -33,8 +34,8 @@
  * future drift. Review the git diff before committing a prune.
  */
 import fs from "node:fs";
-import { USER_AGENT } from "../lib/fetch.mjs";
-import { CATALOG_MIRROR_URL } from "../lib/catalog.mjs";
+import { fetchBuf } from "../lib/fetch.mjs";
+import { loadCatalog } from "../lib/catalog.mjs";
 import { buildMjhWanted } from "../lib/pipeline.mjs";
 
 const MATCHES_PATH = new URL("../matches.json", import.meta.url);
@@ -42,8 +43,22 @@ const MATCHES_PATH = new URL("../matches.json", import.meta.url);
 /* Sites with an adapter in build-epg.mjs. Everything else is an orphan. */
 const ADAPTER_SITES = new Set(["epg.iptvx.one", "i.mjh.nz", "tvguide.myjcom.jp"]);
 
+/* --prune-stale refuses to drop more than this fraction of the valid
+ * entries without --force (E5): a catalog that is empty, truncated or
+ * the wrong document would otherwise mark every entry stale, and the
+ * only protection was the .bak copy. A real catalog churns a handful
+ * of channels between prunes, never half of them. */
+const STALE_MAX_FRACTION = 0.5;
+
+/* --verify-sources checks each mjh path the way the builder fetches it
+ * (build-epg.mjs TIMEOUT_MS.MJH / MJH_MAX_XML_BYTES), so a path over
+ * the builder's cap is reported too — the build would lose it. */
+const MJH_VERIFY_TIMEOUT_MS = 90_000;
+const MJH_VERIFY_MAX_BYTES = 20 * 1024 * 1024;
+
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has("--dry-run");
+const force = args.has("--force");
 const pruneOrphans = args.has("--prune-orphans");
 const pruneStale = args.has("--prune-stale");
 const verifySources = args.has("--verify-sources");
@@ -54,8 +69,10 @@ if (args.has("--help")) {
   --verify-sources        audit + live-check every mjh path
   --prune-orphans [--dry-run]
                           drop entries whose site has no adapter
-  --prune-stale           drop entries whose channel id is no longer
-                          in the live catalog (A1 mirror)`);
+  --prune-stale [--dry-run] [--force]
+                          drop entries whose channel id is no longer
+                          in the live catalog (A1 mirror); refuses to
+                          drop more than ${STALE_MAX_FRACTION * 100}% of the entries without --force`);
   process.exit(0);
 }
 
@@ -98,34 +115,47 @@ let dropped = new Set();
 if (pruneOrphans) for (const [cid] of orphans) dropped.add(cid);
 
 if (pruneStale) {
-  // The A1 mirror, NOT tontonan.online: Cloudflare Bot Fight Mode
-  // challenges GitHub Actions runners, so the site's own catalog.json
-  // 403s from automation — the same reason every catalog fetch in
-  // build-epg.mjs uses the mirror. (This used to fetch tontonan.online
-  // and so only ever worked from a local run.)
-  const catRes = await fetch(CATALOG_MIRROR_URL, {
-    headers: { "User-Agent": USER_AGENT },
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!catRes.ok) throw new Error(`catalog fetch failed: HTTP ${catRes.status}`);
-  const catalog = await catRes.json();
-  const live = new Set((catalog.channels ?? []).map((ch) => ch.id));
-  let stale = 0;
-  for (const [cid] of validEntries) if (!live.has(cid)) { dropped.add(cid); stale++; }
-  console.log(`stale entries (channel not in live catalog): ${stale}`);
+  // The catalog through lib/catalog.mjs loadCatalog (E4/E5): the A1
+  // mirror, NOT tontonan.online (Cloudflare Bot Fight Mode 403s GitHub
+  // Actions runners — the same reason every catalog fetch in
+  // build-epg.mjs uses the mirror), with fetchBuf's timeout and retry,
+  // and parseCatalog's shape check. The inline fetch() + r.json() this
+  // replaces read a 200 with `{}` as an EMPTY live set, so every entry
+  // was "stale" and a non-dry run deleted the whole file's contents.
+  let catalog;
+  try {
+    catalog = await loadCatalog();
+  } catch (e) {
+    console.error(`--prune-stale aborted, nothing dropped: catalog load failed: ${e.message}`);
+    process.exit(1);
+  }
+  const live = new Set(catalog.channels.map((ch) => ch?.id));
+  const stale = validEntries.filter(([cid]) => !live.has(cid)).map(([cid]) => cid);
+  console.log(`stale entries (channel not in live catalog): ${stale.length} of ${validEntries.length}`);
+  if (validEntries.length && stale.length / validEntries.length > STALE_MAX_FRACTION && !force) {
+    if (dryRun) {
+      console.log(`  (more than ${STALE_MAX_FRACTION * 100}% stale: a real run would refuse without --force)`);
+    } else {
+      console.error(
+        `--prune-stale refused, nothing dropped: ${stale.length} of ${validEntries.length} entries would be dropped ` +
+          `(more than ${STALE_MAX_FRACTION * 100}%) — check the catalog (${catalog.channels.length} channels) and re-run with --force if this is real.`,
+      );
+      process.exit(1);
+    }
+  }
+  for (const cid of stale) dropped.add(cid);
 }
 
 if (verifySources) {
   const paths = [...new Set(validEntries.filter(([, m]) => m.site === "i.mjh.nz").map(([, m]) => String(m.site_id).split("#")[0]))];
   console.log(`checking ${paths.length} mjh paths...`);
   for (const path of paths) {
-    const r = await fetch(`https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/${path}.xml`, {
-      headers: { "User-Agent": USER_AGENT },
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!r.ok) {
+    try {
+      // fetchBuf (E4): the repo's one timeout / retry / byte-cap path.
+      await fetchBuf(`https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/${path}.xml`, MJH_VERIFY_TIMEOUT_MS, { maxBytes: MJH_VERIFY_MAX_BYTES });
+    } catch (e) {
       const affected = validEntries.filter(([, m]) => m.site === "i.mjh.nz" && String(m.site_id).split("#")[0] === path).map(([cid]) => cid);
-      console.log(`  ${r.status} ${path} (${affected.length} channels: ${affected.join(", ")})`);
+      console.log(`  FAIL ${path}: ${e.message} (${affected.length} channels: ${affected.join(", ")})`);
     }
   }
 }

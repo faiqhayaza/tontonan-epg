@@ -15,14 +15,19 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 90 min, not 45: the epgpw leg alone is 20 sequential countries
-    # x (180 s + 2 s backoff + 180 s retry) = ~121 min worst case if
-    # every fetch times out, so a 45 min job timeout kills the job
-    # mid-build instead of failing per-country. The 90 min timeout is
-    # a backstop, not a budget: in a total outage it kills the build
-    # mid-flight, before a failing report can be written (the last
-    # good epg.json stays live — nothing is committed unless the gate
-    # passes). See build-epg.mjs TIMEOUT_MS.
+    # A backstop, not a budget. The build bounds itself: its own
+    # deadline (build-epg.mjs BUILD_DEADLINE_MS, 50 min by default)
+    # abandons whatever is still running, fails the gate and still
+    # writes build-report.json, so a total outage ends in a failing
+    # report, not a killed job. (Without that deadline the worst case,
+    # every fetch timing out and retried, is ~385 min (the epgpw leg
+    # alone is 20 sequential countries x (180 s + 2 s backoff + 180 s
+    # retry) = ~121 min); see build-epg.mjs TIMEOUT_MS.) 90 min covers
+    # the steps before the build (clone + npm ci, the channel list, the
+    # grab’s own 25 min `timeout 1500`) plus the 50 min build and the
+    # commit steps. If this timeout ever fires, the run leaves no
+    # report; the last good epg.json stays live, since nothing is
+    # committed unless the gate passes.
     timeout-minutes: 90
     steps:
       # SHA-pinned actions (actions/checkout@v4, actions/setup-node@v4).

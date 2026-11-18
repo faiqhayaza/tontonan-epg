@@ -82,18 +82,37 @@ describe("regenerate-matches.mjs", () => {
     }
   });
 
-  it("prune-stale fetches the A1 mirror, not tontonan.online (S5)", () => {
-    // Regression guard on the URL itself: --prune-stale does live I/O
-    // against a hardcoded URL, so there is no fixture that can observe
-    // which host it hits. The guard fails loudly if the URL regresses
-    // to the host the repo's own comments say 403s from automation.
-    // The URL itself lives in exactly one place (lib/catalog.mjs);
-    // this asserts the script uses that constant.
-    const src = fs.readFileSync(path.join(repoRoot, "scripts/regenerate-matches.mjs"), "utf8");
-    assert.ok(src.includes('import { CATALOG_MIRROR_URL } from "../lib/catalog.mjs"'));
-    assert.ok(src.includes("fetch(CATALOG_MIRROR_URL, {"));
-    assert.ok(!src.includes("https://tontonan.online/catalog.json"));
-    // And the fetches carry a timeout (S4).
-    assert.ok(src.includes("AbortSignal.timeout(60_000)"));
+  it("prune-stale fetches the A1 mirror, not tontonan.online, with an abort signal (S5, S4, E10)", async () => {
+    // Behaviour, not source text (E10): a recording fetch stub,
+    // preloaded with --import, observes the request the script actually
+    // makes. The old version of this test grepped the script's source
+    // for the constant's name, so it stayed green when the request went
+    // to another host (e.g. the constant's value regressed in
+    // lib/catalog.mjs) or the timeout was dropped from the call.
+    const dir = stageFixture();
+    try {
+      const log = path.join(dir, "requests.log");
+      fs.writeFileSync(
+        path.join(dir, "fetch-stub.mjs"),
+        `import fs from "node:fs";
+globalThis.fetch = async (url, init = {}) => {
+  fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ url: String(url), hasSignal: init.signal instanceof AbortSignal }) + "\\n");
+  return new Response(JSON.stringify({ channels: Object.keys(${JSON.stringify(FIXTURE)}).map((id) => ({ id })) }), { status: 200 });
+};
+`,
+      );
+      const { stdout } = await run(process.execPath, ["--import", "./fetch-stub.mjs", "scripts/regenerate-matches.mjs", "--prune-stale", "--dry-run"], { cwd: dir });
+      assert.match(stdout, /stale entries \(channel not in live catalog\): 0\b/);
+      const reqs = fs.readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+      assert.equal(reqs.length, 1);
+      const url = new URL(reqs[0].url);
+      assert.equal(url.host, "oracle-relay.faiqhayaza.com", `fetched ${reqs[0].url}`);
+      assert.notEqual(url.host, "tontonan.online");
+      assert.equal(url.pathname, "/catalog.json");
+      // The fetch carries an abort signal, i.e. it can time out (S4).
+      assert.equal(reqs[0].hasSignal, true, "catalog fetch has no abort signal (no timeout)");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
