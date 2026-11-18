@@ -1,16 +1,16 @@
 {
-  "generatedAt": 1795003226233,
+  "generatedAt": 1795034882018,
   "adapters": {
     "iptvx": {
       "channels": 343,
       "withData": 334,
-      "xmlMB": 440.9
+      "xmlMB": 442.8
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 647,
+      "withData": 646,
       "failedPaths": [
         {
           "path": "Flash/epg",
@@ -18,14 +18,14 @@
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml"
         },
         {
-          "path": "Roku/all",
-          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
-          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
-        },
-        {
           "path": "SkyGo/epg",
           "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml"
+        },
+        {
+          "path": "Roku/all",
+          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
         }
       ]
     },
@@ -37,26 +37,104 @@
       "channels": 1037,
       "files": 59,
       "regions": 59,
-      "withData": 914,
+      "withData": 908,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1420,
-      "withData": 779,
-      "guideKB": 20924
+      "channels": 1373,
+      "withData": 736,
+      "guideKB": 9836
     },
     "epgpw": {
-      "channels": 426,
+      "channels": 382,
       "files": 20,
-      "withData": 416
+      "withData": 365
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3095,
+  "channelsWithData": 2994,
+  "lastGoodChannelsWithData": 3095,
   "gate": {
-    "prevChannelsWithData": 3062,
-    "pass": true
+    "prevChannelsWithData": 3095,
+    "pass": false,
+    "reasons": [
+      "1508 overlapping programmes across 67 channels (threshold 0)"
+    ]
+  },
+  "scan": {
+    "overlaps": 1508,
+    "overlapChannels": 67,
+    "zeroLength": 0,
+    "perChannel": {
+      "NikiKids.ua@SD": 110,
+      "NikiJunior.ua@SD": 109,
+      "KusKus.ua@SD": 88,
+      "France24.fr@French": 83,
+      "CNews.fr@SD": 70,
+      "Nicktoons.us@East": 54,
+      "Nickelodeon.us@East": 53,
+      "Fauna.ua@SD": 40,
+      "NauticalChannel.it@SD": 38,
+      "TraceSportStars.fr@HD": 38,
+      "HopeChannelUkraine.ua@SD": 34,
+      "Nauka.ua@SD": 34,
+      "Terra.ua@SD": 34,
+      "Trofei.ua@SD": 34,
+      "UniverTV.ru@SD": 31,
+      "Mega.ua@SD": 30,
+      "HGTV.us@East": 29,
+      "EspresoTV.ua@SD": 28,
+      "OnePlanet.ua@SD": 27,
+      "NationalGeographicWild.ru@SD": 26,
+      "PLUSPLUS.ua@SD": 26,
+      "PershyiZahidnyi.ua@SD": 26,
+      "Gametoon.nl@SD": 25,
+      "STV.by@HD": 25,
+      "TVSPinballNetwork.us@SD": 25,
+      "Gulli.fr@SD": 24,
+      "DiscoveryChannel.us@East": 21,
+      "QuizTV.ua@SD": 21,
+      "Muzvar.ua@SD": 19,
+      "CNBCIndonesia.id@SD": 18,
+      "TVSHiTops.us@SD": 18,
+      "ICTV2.ua@SD": 17,
+      "6ter.fr@SD": 16,
+      "TVSMainstreet.us@SD": 14,
+      "TVSNostalgia.us@SD": 14,
+      "OTSE.ua@SD": 13,
+      "CNNIndonesia.id@SD": 11,
+      "Kinowood.ua@SD": 11,
+      "NTN.ua@SD": 11,
+      "TVSTavern.us@SD": 11,
+      "BFMTV.fr@SD": 9,
+      "TVSCipherNetwork.us@SD": 9,
+      "TVSBoxing.us@SD": 8,
+      "TVSClassicSports.us@SD": 8,
+      "TVSComedyNetwork.us@SD": 8,
+      "TVSHollywoodHistory.us@SD": 8,
+      "TVSQuizShowNetwork.us@SD": 8,
+      "TVSSelectNetwork.us@SD": 8,
+      "TVSTallyHo.us@SD": 8,
+      "TVSTurbo.us@SD": 8,
+      "TVSWomenSports.us@SD": 8,
+      "ANT1.gr@SD": 7,
+      "ViasatKino.ua@Balkan": 6,
+      "BFMLyon.fr@SD": 5,
+      "Svarozhychy.ua@SD": 5,
+      "TVSDriveInMovie.us@SD": 5,
+      "TVSNostalgiaMovies.us@SD": 5,
+      "CodeFashionTV.bg@SD": 4,
+      "FoxSports1.us@HD": 4,
+      "RugbyPassTV.uk@SD": 4,
+      "TVSClassicMovies.us@SD": 4,
+      "TVSWesternMovie.us@SD": 4,
+      "ViasatKinoComedy.ua@SD": 4,
+      "CodeHealthTV.bg@SD": 2,
+      "SpaceLivepoweredbysen.uk@SD": 1,
+      "TVRuzinov.sk@SD": 1,
+      "UniversalCrime.us@East": 1
+    }
   }
 }
