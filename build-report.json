@@ -1,16 +1,16 @@
 {
-  "generatedAt": 1795034882018,
+  "generatedAt": 1795056180268,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 334,
+      "withData": 330,
       "xmlMB": 442.8
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 646,
+      "withData": 641,
       "failedPaths": [
         {
           "path": "Flash/epg",
@@ -18,14 +18,14 @@
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml"
         },
         {
-          "path": "SkyGo/epg",
-          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml)",
-          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml"
-        },
-        {
           "path": "Roku/all",
           "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
+        },
+        {
+          "path": "SkyGo/epg",
+          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml)",
+          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/SkyGo/epg.xml"
         }
       ]
     },
@@ -35,106 +35,106 @@
     },
     "epgshare": {
       "channels": 1037,
-      "files": 59,
-      "regions": 59,
-      "withData": 908,
+      "files": 58,
+      "regions": 58,
+      "withData": 888,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
       "channels": 1373,
-      "withData": 736,
-      "guideKB": 9836
+      "withData": 747,
+      "guideKB": 9883
     },
     "epgpw": {
-      "channels": 382,
+      "channels": 379,
       "files": 20,
-      "withData": 365
+      "withData": 374
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 2994,
+  "channelsWithData": 2985,
   "lastGoodChannelsWithData": 3095,
   "gate": {
     "prevChannelsWithData": 3095,
     "pass": false,
     "reasons": [
-      "1508 overlapping programmes across 67 channels (threshold 0)"
+      "1507 overlapping programmes across 67 channels (threshold 0)"
     ]
   },
   "scan": {
-    "overlaps": 1508,
+    "overlaps": 1507,
     "overlapChannels": 67,
     "zeroLength": 0,
     "perChannel": {
-      "NikiKids.ua@SD": 110,
-      "NikiJunior.ua@SD": 109,
-      "KusKus.ua@SD": 88,
-      "France24.fr@French": 83,
-      "CNews.fr@SD": 70,
-      "Nicktoons.us@East": 54,
-      "Nickelodeon.us@East": 53,
-      "Fauna.ua@SD": 40,
+      "NikiJunior.ua@SD": 119,
+      "NikiKids.ua@SD": 116,
+      "KusKus.ua@SD": 87,
+      "France24.fr@French": 78,
+      "CNews.fr@SD": 72,
+      "Nicktoons.us@East": 59,
+      "Nickelodeon.us@East": 55,
+      "Fauna.ua@SD": 42,
       "NauticalChannel.it@SD": 38,
       "TraceSportStars.fr@HD": 38,
-      "HopeChannelUkraine.ua@SD": 34,
-      "Nauka.ua@SD": 34,
+      "Nauka.ua@SD": 35,
+      "PershyiZahidnyi.ua@SD": 35,
+      "PLUSPLUS.ua@SD": 34,
       "Terra.ua@SD": 34,
       "Trofei.ua@SD": 34,
-      "UniverTV.ru@SD": 31,
+      "HopeChannelUkraine.ua@SD": 31,
+      "EspresoTV.ua@SD": 30,
       "Mega.ua@SD": 30,
+      "UniverTV.ru@SD": 30,
       "HGTV.us@East": 29,
-      "EspresoTV.ua@SD": 28,
       "OnePlanet.ua@SD": 27,
+      "STV.by@HD": 27,
       "NationalGeographicWild.ru@SD": 26,
-      "PLUSPLUS.ua@SD": 26,
-      "PershyiZahidnyi.ua@SD": 26,
       "Gametoon.nl@SD": 25,
-      "STV.by@HD": 25,
-      "TVSPinballNetwork.us@SD": 25,
-      "Gulli.fr@SD": 24,
-      "DiscoveryChannel.us@East": 21,
+      "Gulli.fr@SD": 25,
+      "DiscoveryChannel.us@East": 22,
       "QuizTV.ua@SD": 21,
+      "AsharqNews.sa@SD": 20,
       "Muzvar.ua@SD": 19,
-      "CNBCIndonesia.id@SD": 18,
-      "TVSHiTops.us@SD": 18,
-      "ICTV2.ua@SD": 17,
-      "6ter.fr@SD": 16,
-      "TVSMainstreet.us@SD": 14,
-      "TVSNostalgia.us@SD": 14,
-      "OTSE.ua@SD": 13,
-      "CNNIndonesia.id@SD": 11,
+      "6ter.fr@SD": 17,
+      "TVSPinballNetwork.us@SD": 16,
+      "CNBCIndonesia.id@SD": 14,
+      "ICTV2.ua@SD": 14,
+      "TVSHiTops.us@SD": 14,
+      "TVSMainstreet.us@SD": 12,
       "Kinowood.ua@SD": 11,
       "NTN.ua@SD": 11,
-      "TVSTavern.us@SD": 11,
-      "BFMTV.fr@SD": 9,
-      "TVSCipherNetwork.us@SD": 9,
-      "TVSBoxing.us@SD": 8,
-      "TVSClassicSports.us@SD": 8,
-      "TVSComedyNetwork.us@SD": 8,
-      "TVSHollywoodHistory.us@SD": 8,
-      "TVSQuizShowNetwork.us@SD": 8,
-      "TVSSelectNetwork.us@SD": 8,
-      "TVSTallyHo.us@SD": 8,
-      "TVSTurbo.us@SD": 8,
-      "TVSWomenSports.us@SD": 8,
-      "ANT1.gr@SD": 7,
-      "ViasatKino.ua@Balkan": 6,
-      "BFMLyon.fr@SD": 5,
+      "BFMTV.fr@SD": 10,
+      "CNNIndonesia.id@SD": 10,
+      "BFMLyon.fr@SD": 8,
+      "RugbyPassTV.uk@SD": 8,
+      "TVSNostalgia.us@SD": 8,
+      "TVSCipherNetwork.us@SD": 7,
+      "ViasatKinoComedy.ua@SD": 7,
+      "OTSE.ua@SD": 6,
+      "TVRuzinov.sk@SD": 6,
+      "TVSBoxing.us@SD": 6,
+      "TVSClassicSports.us@SD": 6,
+      "TVSComedyNetwork.us@SD": 6,
+      "TVSHollywoodHistory.us@SD": 6,
+      "TVSQuizShowNetwork.us@SD": 6,
+      "TVSSelectNetwork.us@SD": 6,
+      "TVSTallyHo.us@SD": 6,
+      "TVSTavern.us@SD": 6,
+      "TVSTurbo.us@SD": 6,
+      "TVSWomenSports.us@SD": 6,
       "Svarozhychy.ua@SD": 5,
-      "TVSDriveInMovie.us@SD": 5,
-      "TVSNostalgiaMovies.us@SD": 5,
-      "CodeFashionTV.bg@SD": 4,
       "FoxSports1.us@HD": 4,
-      "RugbyPassTV.uk@SD": 4,
-      "TVSClassicMovies.us@SD": 4,
-      "TVSWesternMovie.us@SD": 4,
-      "ViasatKinoComedy.ua@SD": 4,
-      "CodeHealthTV.bg@SD": 2,
-      "SpaceLivepoweredbysen.uk@SD": 1,
-      "TVRuzinov.sk@SD": 1,
-      "UniversalCrime.us@East": 1
+      "TVSDriveInMovie.us@SD": 3,
+      "TVSWesternMovie.us@SD": 3,
+      "UniversalCrime.us@East": 3,
+      "ViasatKino.ua@Balkan": 3,
+      "ANT1.gr@SD": 2,
+      "SolMusica.es@SD": 2,
+      "SpaceLivepoweredbysen.uk@SD": 2,
+      "TVSNostalgiaMovies.us@SD": 2,
+      "TVSClassicMovies.us@SD": 1
     }
   }
 }
