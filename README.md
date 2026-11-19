@@ -174,10 +174,13 @@ Example, in the current report shape. The `generatedAt`, `adapters`,
 the 2026-11-16 build (`generatedAt` 1794858367826), excerpted: two of
 mjh's three `failedPaths` entries (`Flash/epg` 404, `SkyGo/epg` over
 the cap) are left out for length. That build predates
-`lastGoodChannelsWithData` and `scan`, so those two fields are shown
-as a build that passes today's gate records them — the gate passed, so
-the last-good count is this run's count, and a passing build's scan is
-necessarily all zero (any overlap fails the gate):
+`lastGoodChannelsWithData`, `scan` and `repair`, so those three fields
+are shown as a build that passes today's gate records them — the gate
+passed, so the last-good count is this run's count, and a passing
+build's scan is necessarily all zero (any overlap fails the gate).
+The `repair` figures are the counts from repairing the shipped guide
+(5,118 overlaps across 104 channels; 1,002 clipped, 1,172 dropped),
+with the top three `perChannel` entries shown:
 
 ```json
 {
@@ -203,7 +206,8 @@ necessarily all zero (any overlap fails the gate):
   "channelsWithData": 3067,
   "lastGoodChannelsWithData": 3067,
   "gate": { "prevChannelsWithData": 3025, "pass": true },
-  "scan": { "overlaps": 0, "overlapChannels": 0, "zeroLength": 0, "perChannel": {} }
+  "scan": { "overlaps": 0, "overlapChannels": 0, "zeroLength": 0, "perChannel": {} },
+  "repair": { "clipped": 1002, "dropped": 1172, "perChannel": { "Channel5.uk": 112, "64305451fc3be5947773c339-678fe7959407a53556d3e8eb": 111, "France4.fr@SD": 106 } }
 }
 ```
 
@@ -217,6 +221,12 @@ necessarily all zero (any overlap fails the gate):
 - `scan` — `{ overlaps, overlapChannels, zeroLength, perChannel }`, the
   schedule scan of the final `epg.json` map (`perChannel` lists overlap
   counts per channel, largest first).
+- `repair` — `{ clipped, dropped, perChannel }`, the overlap repair of
+  the final `epg.json` map before the scan (`perChannel` counts clipped
+  + dropped per channel, largest first). `clipped` is the number of
+  programmes whose end was shortened to the next programme's start;
+  `dropped` is the number removed (same-start duplicate, or invalid).
+  Always present, even when 0.
 - `matchesError` — present only when `matches.json` could not be
   loaded (its text is also one of the gate's `reasons`).
 

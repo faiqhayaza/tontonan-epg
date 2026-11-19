@@ -34,7 +34,7 @@ import fs from "node:fs";
 import { extractXmltv, parseXmltvChannels } from "./lib/epg-utils.mjs";
 import { fetchBuf, gunzipCapped } from "./lib/fetch.mjs";
 import { buildCatalogIndexes, buildCountryNameIndex, loadCatalog, matchEpgpwNames, resolveGuideId, stripId } from "./lib/catalog.mjs";
-import { buildMjhWanted, evaluateGate, extractMyjcomProgrammes, loadMatches, nextLastGood, readGateBaseline, scanGateReasons, scanSchedules } from "./lib/pipeline.mjs";
+import { buildMjhWanted, evaluateGate, extractMyjcomProgrammes, loadMatches, nextLastGood, readGateBaseline, repairSchedules, scanGateReasons, scanSchedules } from "./lib/pipeline.mjs";
 
 /* matches.json, loaded guarded (lib/pipeline.mjs: loadMatches): a corrupt
  * file used to throw here at import time, before any adapter ran and
@@ -569,15 +569,26 @@ for (const [name, fn] of [["iptvx", adapterIptvx], ["mjh", adapterMjh], ["myjcom
   }
 }
 
-for (const list of Object.values(results)) list.sort((a, b) => a[0] - b[0]);
+/* Overlap repair (lib/pipeline.mjs: repairSchedules): the source
+ * guide data itself overlaps (see the repair's comment), so each
+ * channel's list is normalized here — clip-to-next-start — after the
+ * adapters and before the scan. The repair owns the sort (one sort,
+ * one place); the scan below then independently verifies the final
+ * map still has 0 overlaps, so the gate stays the verifier. The
+ * repair's counts go in the report (repair) so nothing is dropped
+ * silently. */
+const repair = repairSchedules(results);
+for (const [cid, list] of Object.entries(repair.channels)) results[cid] = list;
 const total = Object.keys(results).length;
 const out = { v: 1, generatedAt: NOW, channels: results };
 
 /* Schedule scan (E-new, lib/pipeline.mjs: scanSchedules): overlapping
  * programmes per channel and zero-length/inverted entries, over the
- * FINAL map, after sorting. The 2026-11-18 epg.json carried 4,597
- * overlapping programmes across 130 channels (two upstream schedules
- * appended into one list) and nothing anywhere checked for it. */
+ * FINAL map — after the repair above, so a passing scan means the
+ * repair left 0 overlaps (and a repair bug that left any would still
+ * fail the gate). The 2026-11-18 epg.json carried 4,597 overlapping
+ * programmes across 130 channels (two upstream schedules appended
+ * into one list) and nothing anywhere checked for it. */
 const scan = scanSchedules(results);
 
 /* Failure gate (rules + boundary tests in lib/pipeline.mjs): a
@@ -635,7 +646,7 @@ const lastGoodChannelsWithData = nextLastGood(gate.pass, total, baseline);
 
 fs.writeFileSync(
   new URL("./build-report.json", import.meta.url),
-  JSON.stringify({ generatedAt: NOW, adapters: report, channelsWithData: total, lastGoodChannelsWithData, gate, scan, ...(matchesError ? { matchesError } : {}) }, null, 2),
+  JSON.stringify({ generatedAt: NOW, adapters: report, channelsWithData: total, lastGoodChannelsWithData, gate, scan, repair: { clipped: repair.clipped, dropped: repair.dropped, perChannel: repair.perChannel }, ...(matchesError ? { matchesError } : {}) }, null, 2),
 );
 if (!gate.pass) {
   console.error(`GATE FAILED (${gateReasons.join("; ")}): epg.json NOT overwritten, keeping last good build`);
