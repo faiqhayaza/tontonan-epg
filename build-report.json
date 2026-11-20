@@ -1,16 +1,16 @@
 {
-  "generatedAt": 1795121633841,
+  "generatedAt": 1795141749028,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 334,
+      "withData": 331,
       "xmlMB": 481.7
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 648,
+      "withData": 624,
       "failedPaths": [
         {
           "path": "Flash/epg",
@@ -34,30 +34,30 @@
       "withData": 5
     },
     "epgshare": {
-      "channels": 1037,
+      "channels": 1040,
       "files": 59,
       "regions": 59,
-      "withData": 876,
+      "withData": 919,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1380,
-      "withData": 736,
-      "guideKB": 9898
+      "channels": 1389,
+      "withData": 725,
+      "guideKB": 19571
     },
     "epgpw": {
-      "channels": 384,
+      "channels": 378,
       "files": 20,
-      "withData": 378
+      "withData": 374
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 2977,
-  "lastGoodChannelsWithData": 2977,
+  "channelsWithData": 2978,
+  "lastGoodChannelsWithData": 2978,
   "gate": {
-    "prevChannelsWithData": 3001,
+    "prevChannelsWithData": 2977,
     "pass": true
   },
   "scan": {
@@ -67,49 +67,23 @@
     "perChannel": {}
   },
   "repair": {
-    "clipped": 239,
-    "dropped": 184,
+    "clipped": 52,
+    "dropped": 190,
     "perChannel": {
-      "France24.fr@French": 85,
-      "CNews.fr@SD": 57,
-      "Gulli.fr@SD": 21,
+      "France24.fr@French": 82,
+      "CNews.fr@SD": 58,
+      "Gulli.fr@SD": 23,
+      "69c5100c3d2597380f0f6422": 22,
       "6ter.fr@SD": 20,
-      "TVSPinballNetwork.us@SD": 19,
-      "TVSHiTops.us@SD": 18,
-      "TVSMainstreet.us@SD": 15,
-      "TVSNostalgia.us@SD": 14,
-      "CNNIndonesia.id@SD": 13,
-      "TVSCipherNetwork.us@SD": 13,
-      "TVSTavern.us@SD": 12,
-      "BFMTV.fr@SD": 9,
-      "TVSBoxing.us@SD": 8,
-      "TVSClassicSports.us@SD": 8,
-      "TVSComedyNetwork.us@SD": 8,
-      "TVSHollywoodHistory.us@SD": 8,
-      "TVSQuizShowNetwork.us@SD": 8,
-      "TVSSelectNetwork.us@SD": 8,
-      "TVSTallyHo.us@SD": 8,
-      "TVSTurbo.us@SD": 8,
-      "TVSWomenSports.us@SD": 8,
-      "BFMLyon.fr@SD": 7,
-      "CNBCIndonesia.id@SD": 6,
-      "CodeFashionTV.bg@SD": 5,
-      "TVSWesternMovie.us@SD": 5,
-      "ANT1.gr@SD": 4,
-      "FoxSports1.us@HD": 4,
-      "TVSClassicMovies.us@SD": 4,
-      "TVSDriveInMovie.us@SD": 4,
-      "TVSNostalgiaMovies.us@SD": 4,
-      "CodeHealthTV.bg@SD": 2,
-      "AsharqNews.sa@SD": 1,
+      "SICAltaDefinicao.pt@SD": 14,
+      "BFMTV.fr@SD": 10,
+      "BFMLyon.fr@SD": 6,
       "HopeChannelUkraine.ua@SD": 1,
       "PershyiZahidnyi.ua@SD": 1,
       "PlutoTVSnooker900.us@CA": 1,
       "RugbyPassTV.uk@SD": 1,
-      "SpaceLivepoweredbysen.uk@SD": 1,
       "Svarozhychy.ua@SD": 1,
-      "TVRuzinov.sk@SD": 1,
-      "UniversalCrime.us@East": 1,
+      "TV5MondeAfrica.fr@SD": 1,
       "ViasatKinoComedy.ua@SD": 1
     }
   }
