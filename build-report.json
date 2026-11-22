@@ -1,26 +1,26 @@
 {
-  "generatedAt": 1795289804333,
+  "generatedAt": 1795310897174,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 334,
-      "xmlMB": 512
+      "withData": 331,
+      "xmlMB": 512.8
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 639,
+      "withData": 646,
       "failedPaths": [
-        {
-          "path": "Roku/all",
-          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
-          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
-        },
         {
           "path": "Flash/epg",
           "error": "HTTP 404 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml"
+        },
+        {
+          "path": "Roku/all",
+          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
         },
         {
           "path": "SkyGo/epg",
@@ -34,30 +34,30 @@
       "withData": 5
     },
     "epgshare": {
-      "channels": 1038,
-      "files": 59,
-      "regions": 59,
-      "withData": 910,
+      "channels": 1037,
+      "files": 58,
+      "regions": 58,
+      "withData": 920,
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1386,
-      "withData": 744,
-      "guideKB": 9794
+      "channels": 1406,
+      "withData": 749,
+      "guideKB": 19689
     },
     "epgpw": {
-      "channels": 383,
+      "channels": 381,
       "files": 20,
-      "withData": 379
+      "withData": 376
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3011,
-  "lastGoodChannelsWithData": 3011,
+  "channelsWithData": 3027,
+  "lastGoodChannelsWithData": 3027,
   "gate": {
-    "prevChannelsWithData": 2982,
+    "prevChannelsWithData": 3011,
     "pass": true
   },
   "scan": {
@@ -67,45 +67,20 @@
     "perChannel": {}
   },
   "repair": {
-    "clipped": 257,
-    "dropped": 154,
+    "clipped": 81,
+    "dropped": 164,
     "perChannel": {
-      "France24.fr@French": 78,
-      "CNews.fr@SD": 73,
-      "TVSHiTops.us@SD": 22,
-      "CNBCIndonesia.id@SD": 21,
-      "TVSPinballNetwork.us@SD": 20,
-      "6ter.fr@SD": 16,
-      "TVSTavern.us@SD": 16,
-      "TVSNostalgia.us@SD": 11,
-      "Gulli.fr@SD": 10,
-      "TVSCipherNetwork.us@SD": 10,
-      "TVSBoxing.us@SD": 9,
-      "TVSClassicSports.us@SD": 9,
-      "TVSComedyNetwork.us@SD": 9,
-      "TVSHollywoodHistory.us@SD": 9,
-      "TVSQuizShowNetwork.us@SD": 9,
-      "TVSSelectNetwork.us@SD": 9,
-      "TVSTallyHo.us@SD": 9,
-      "TVSTurbo.us@SD": 9,
-      "TVSWomenSports.us@SD": 9,
-      "TVSNostalgiaMovies.us@SD": 8,
-      "BFMTV.fr@SD": 7,
-      "TVSClassicMovies.us@SD": 5,
-      "TVSDriveInMovie.us@SD": 5,
-      "TVSMainstreet.us@SD": 5,
-      "CodeFashionTV.bg@SD": 4,
-      "FoxSports1.us@HD": 4,
-      "TVSWesternMovie.us@SD": 4,
-      "BFMLyon.fr@SD": 2,
-      "TVRuzinov.sk@SD": 2,
-      "2Plus2.ua@SD": 1,
-      "6971fc6dca441014e4600f2c": 1,
-      "CNNIndonesia.id@SD": 1,
-      "CodeHealthTV.bg@SD": 1,
-      "MakTV.gr": 1,
-      "SpaceLivepoweredbysen.uk@SD": 1,
-      "UniversalCrime.us@East": 1
+      "France24.fr@French": 76,
+      "CNews.fr@SD": 75,
+      "69c5100c3d2597380f0f6422": 19,
+      "6ter.fr@SD": 18,
+      "SICAltaDefinicao.pt@SD": 14,
+      "Gulli.fr@SD": 12,
+      "ToonamiAftermath.us@East": 12,
+      "BFMTV.fr@SD": 10,
+      "ANT1.gr@SD": 5,
+      "BFMLyon.fr@SD": 3,
+      "2Plus2.ua@SD": 1
     }
   }
 }
