@@ -1,16 +1,16 @@
 {
-  "generatedAt": 1795398815350,
+  "generatedAt": 1795440121388,
   "adapters": {
     "iptvx": {
-      "error": "Cannot create a Buffer larger than 629145600 bytes",
-      "url": "https://iptvx.one/epg/epg_noarch.xml.gz",
-      "at": "2026-11-23T01:53:35.350Z"
+      "channels": 343,
+      "withData": 327,
+      "xmlMB": 337
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 646,
+      "withData": 641,
       "failedPaths": [
         {
           "path": "Flash/epg",
@@ -34,37 +34,57 @@
       "withData": 5
     },
     "epgshare": {
-      "channels": 1061,
-      "files": 58,
-      "regions": 58,
-      "withData": 940,
+      "channels": 1035,
+      "files": 57,
+      "regions": 57,
+      "withData": 909,
       "failedLists": [
         {
           "region": "EG1",
           "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_EG1.txt)",
           "url": "https://epgshare01.online/epgshare01/epg_ripper_EG1.txt"
+        },
+        {
+          "region": "PH1",
+          "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_PH1.txt)",
+          "url": "https://epgshare01.online/epgshare01/epg_ripper_PH1.txt"
+        },
+        {
+          "region": "PK1",
+          "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_PK1.txt)",
+          "url": "https://epgshare01.online/epgshare01/epg_ripper_PK1.txt"
+        },
+        {
+          "region": "SA1",
+          "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_SA1.txt)",
+          "url": "https://epgshare01.online/epgshare01/epg_ripper_SA1.txt"
+        },
+        {
+          "region": "VOA1",
+          "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_VOA1.txt)",
+          "url": "https://epgshare01.online/epgshare01/epg_ripper_VOA1.txt"
         }
       ],
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1372,
-      "withData": 764,
-      "guideKB": 10480
+      "channels": 1412,
+      "withData": 739,
+      "guideKB": 20197
     },
     "epgpw": {
-      "channels": 415,
+      "channels": 379,
       "files": 20,
-      "withData": 408
+      "withData": 372
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 2763,
-  "lastGoodChannelsWithData": 2763,
+  "channelsWithData": 2993,
+  "lastGoodChannelsWithData": 2993,
   "gate": {
-    "prevChannelsWithData": 2918,
+    "prevChannelsWithData": 2763,
     "pass": true
   },
   "scan": {
@@ -74,42 +94,19 @@
     "perChannel": {}
   },
   "repair": {
-    "clipped": 165,
-    "dropped": 215,
+    "clipped": 25,
+    "dropped": 208,
     "perChannel": {
       "France24.fr@French": 81,
-      "CNews.fr@SD": 48,
-      "Gulli.fr@SD": 29,
-      "6ter.fr@SD": 17,
-      "TVSPinballNetwork.us@SD": 15,
-      "TVSTavern.us@SD": 15,
-      "CNNIndonesia.id@SD": 14,
-      "TVSHiTops.us@SD": 14,
-      "TVSNostalgia.us@SD": 14,
-      "BFMTV.fr@SD": 11,
-      "TVSMainstreet.us@SD": 11,
-      "TVSCipherNetwork.us@SD": 10,
-      "ANT1.gr@SD": 8,
-      "CNBCIndonesia.id@SD": 7,
+      "CNews.fr@SD": 53,
+      "69c5100c3d2597380f0f6422": 21,
+      "Gulli.fr@SD": 21,
+      "ANT1.gr@SD": 15,
+      "6ter.fr@SD": 13,
+      "SICAltaDefinicao.pt@SD": 13,
+      "BFMTV.fr@SD": 9,
       "BFMLyon.fr@SD": 6,
-      "TVRuzinov.sk@SD": 6,
-      "TVSBoxing.us@SD": 6,
-      "TVSClassicSports.us@SD": 6,
-      "TVSComedyNetwork.us@SD": 6,
-      "TVSHollywoodHistory.us@SD": 6,
-      "TVSQuizShowNetwork.us@SD": 6,
-      "TVSSelectNetwork.us@SD": 6,
-      "TVSTallyHo.us@SD": 6,
-      "TVSTurbo.us@SD": 6,
-      "TVSWomenSports.us@SD": 6,
-      "FoxSports1.us@HD": 4,
-      "TVSClassicMovies.us@SD": 4,
-      "UniversalCrime.us@East": 3,
-      "SolMusica.es@SD": 2,
-      "SpaceLivepoweredbysen.uk@SD": 2,
-      "TVSNostalgiaMovies.us@SD": 2,
-      "TVSWesternMovie.us@SD": 2,
-      "TVSDriveInMovie.us@SD": 1
+      "MTV.de@SD": 1
     }
   }
 }
