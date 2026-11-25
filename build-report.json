@@ -1,16 +1,16 @@
 {
-  "generatedAt": 1795564879803,
+  "generatedAt": 1795597041492,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 330,
-      "xmlMB": 430.9
+      "withData": 329,
+      "xmlMB": 373.4
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 629,
+      "withData": 645,
       "failedPaths": [
         {
           "path": "Flash/epg",
@@ -34,9 +34,9 @@
       "withData": 5
     },
     "epgshare": {
-      "channels": 1036,
-      "files": 56,
-      "regions": 56,
+      "channels": 1034,
+      "files": 57,
+      "regions": 57,
       "withData": 889,
       "failedLists": [
         {
@@ -45,14 +45,14 @@
           "url": "https://epgshare01.online/epgshare01/epg_ripper_EG1.txt"
         },
         {
-          "region": "PH1",
-          "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_PH1.txt)",
-          "url": "https://epgshare01.online/epgshare01/epg_ripper_PH1.txt"
-        },
-        {
           "region": "PK1",
           "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_PK1.txt)",
           "url": "https://epgshare01.online/epgshare01/epg_ripper_PK1.txt"
+        },
+        {
+          "region": "PH1",
+          "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_PH1.txt)",
+          "url": "https://epgshare01.online/epgshare01/epg_ripper_PH1.txt"
         },
         {
           "region": "SA1",
@@ -68,23 +68,23 @@
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1390,
-      "withData": 686,
-      "guideKB": 9876
+      "channels": 1407,
+      "withData": 729,
+      "guideKB": 18967
     },
     "epgpw": {
-      "channels": 378,
+      "channels": 385,
       "files": 20,
-      "withData": 370
+      "withData": 378
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 2909,
-  "lastGoodChannelsWithData": 2909,
+  "channelsWithData": 2975,
+  "lastGoodChannelsWithData": 2975,
   "gate": {
-    "prevChannelsWithData": 2977,
+    "prevChannelsWithData": 2909,
     "pass": true
   },
   "scan": {
@@ -94,42 +94,17 @@
     "perChannel": {}
   },
   "repair": {
-    "clipped": 140,
-    "dropped": 109,
+    "clipped": 12,
+    "dropped": 116,
     "perChannel": {
-      "CNews.fr@SD": 51,
-      "CNNIndonesia.id@SD": 28,
-      "CNBCIndonesia.id@SD": 20,
+      "CNews.fr@SD": 30,
+      "69c5100c3d2597380f0f6422": 20,
+      "Gulli.fr@SD": 20,
       "6ter.fr@SD": 19,
-      "Gulli.fr@SD": 18,
-      "BFMTV.fr@SD": 11,
-      "TVSPinballNetwork.us@SD": 11,
-      "TVSHiTops.us@SD": 10,
-      "TVSTavern.us@SD": 8,
-      "CodeFashionTV.bg@SD": 6,
-      "France24.fr@French": 6,
-      "TVSNostalgia.us@SD": 6,
-      "BFMLyon.fr@SD": 5,
-      "FoxSports1.us@HD": 4,
-      "TVSCipherNetwork.us@SD": 4,
-      "TVSBoxing.us@SD": 3,
-      "TVSClassicSports.us@SD": 3,
-      "TVSComedyNetwork.us@SD": 3,
-      "TVSHollywoodHistory.us@SD": 3,
-      "TVSQuizShowNetwork.us@SD": 3,
-      "TVSSelectNetwork.us@SD": 3,
-      "TVSTallyHo.us@SD": 3,
-      "TVSTurbo.us@SD": 3,
-      "TVSWomenSports.us@SD": 3,
-      "CodeHealthTV.bg@SD": 2,
-      "TVSClassicMovies.us@SD": 2,
-      "TVSDriveInMovie.us@SD": 2,
-      "TVSMainstreet.us@SD": 2,
-      "TVSNostalgiaMovies.us@SD": 2,
-      "TVSWesternMovie.us@SD": 2,
-      "FridayInternational.ru@Kazakhstan": 1,
-      "MTV.de@SD": 1,
-      "SuperTennis.it@SD": 1
+      "5f7790b3ed0c88000720b241": 13,
+      "SICAltaDefinicao.pt@SD": 11,
+      "BFMTV.fr@SD": 10,
+      "BFMLyon.fr@SD": 5
     }
   }
 }
