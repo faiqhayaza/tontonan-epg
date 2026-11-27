@@ -1,16 +1,16 @@
 {
-  "generatedAt": 1795744282036,
+  "generatedAt": 1795784040054,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 332,
-      "xmlMB": 329.2
+      "withData": 335,
+      "xmlMB": 274.2
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 647,
+      "withData": 629,
       "failedPaths": [
         {
           "path": "Roku/all",
@@ -37,7 +37,7 @@
       "channels": 1034,
       "files": 57,
       "regions": 57,
-      "withData": 925,
+      "withData": 918,
       "failedLists": [
         {
           "region": "EG1",
@@ -68,23 +68,23 @@
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1409,
-      "withData": 786,
-      "guideKB": 20874
+      "channels": 1366,
+      "withData": 735,
+      "guideKB": 9819
     },
     "epgpw": {
-      "channels": 379,
+      "channels": 381,
       "files": 20,
-      "withData": 376
+      "withData": 377
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 3071,
-  "lastGoodChannelsWithData": 3071,
+  "channelsWithData": 2999,
+  "lastGoodChannelsWithData": 2999,
   "gate": {
-    "prevChannelsWithData": 3041,
+    "prevChannelsWithData": 3071,
     "pass": true
   },
   "scan": {
@@ -94,18 +94,40 @@
     "perChannel": {}
   },
   "repair": {
-    "clipped": 51,
-    "dropped": 103,
+    "clipped": 447,
+    "dropped": 70,
     "perChannel": {
-      "CNews.fr@SD": 52,
-      "Gulli.fr@SD": 26,
-      "69c5100c3d2597380f0f6422": 20,
+      "TVSPinballNetwork.us@SD": 51,
+      "TVSHiTops.us@SD": 44,
+      "TVSTavern.us@SD": 39,
+      "TVSMainstreet.us@SD": 35,
+      "TVSNostalgia.us@SD": 31,
+      "Gulli.fr@SD": 21,
+      "CNews.fr@SD": 20,
       "6ter.fr@SD": 19,
-      "5f7790b3ed0c88000720b241": 16,
-      "SICAltaDefinicao.pt@SD": 12,
-      "ANT1.gr@SD": 7,
-      "FridayInternational.ru@Kazakhstan": 1,
-      "TV5MondeAfrica.fr@SD": 1
+      "TVSCipherNetwork.us@SD": 19,
+      "TVSBoxing.us@SD": 18,
+      "TVSClassicSports.us@SD": 18,
+      "TVSComedyNetwork.us@SD": 18,
+      "TVSHollywoodHistory.us@SD": 18,
+      "TVSQuizShowNetwork.us@SD": 18,
+      "TVSSelectNetwork.us@SD": 18,
+      "TVSTallyHo.us@SD": 18,
+      "TVSTurbo.us@SD": 18,
+      "TVSWomenSports.us@SD": 18,
+      "ANT1.gr@SD": 14,
+      "TVSDriveInMovie.us@SD": 11,
+      "TVSClassicMovies.us@SD": 9,
+      "TVSNostalgiaMovies.us@SD": 9,
+      "TVSWesternMovie.us@SD": 8,
+      "CNNIndonesia.id@SD": 7,
+      "CodeFashionTV.bg@SD": 4,
+      "FoxSports1.us@HD": 4,
+      "TVRuzinov.sk@SD": 4,
+      "UniversalCrime.us@East": 2,
+      "WorldPokerTour.us@US": 2,
+      "CodeHealthTV.bg@SD": 1,
+      "SolMusica.es@SD": 1
     }
   }
 }
