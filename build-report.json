@@ -1,26 +1,26 @@
 {
-  "generatedAt": 1795822681736,
+  "generatedAt": 1795853670051,
   "adapters": {
     "iptvx": {
       "channels": 343,
-      "withData": 335,
+      "withData": 331,
       "xmlMB": 292.5
     },
     "mjh": {
       "channels": 787,
       "files": 24,
       "paths": 27,
-      "withData": 639,
+      "withData": 623,
       "failedPaths": [
-        {
-          "path": "Roku/all",
-          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
-          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
-        },
         {
           "path": "Flash/epg",
           "error": "HTTP 404 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml)",
           "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Flash/epg.xml"
+        },
+        {
+          "path": "Roku/all",
+          "error": "downloaded 20987904 bytes, exceeds cap 20971520 (https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml)",
+          "url": "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/Roku/all.xml"
         },
         {
           "path": "SkyGo/epg",
@@ -34,7 +34,7 @@
       "withData": 5
     },
     "epgshare": {
-      "channels": 1035,
+      "channels": 1037,
       "files": 57,
       "regions": 57,
       "withData": 939,
@@ -45,14 +45,14 @@
           "url": "https://epgshare01.online/epgshare01/epg_ripper_EG1.txt"
         },
         {
-          "region": "PH1",
-          "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_PH1.txt)",
-          "url": "https://epgshare01.online/epgshare01/epg_ripper_PH1.txt"
-        },
-        {
           "region": "PK1",
           "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_PK1.txt)",
           "url": "https://epgshare01.online/epgshare01/epg_ripper_PK1.txt"
+        },
+        {
+          "region": "PH1",
+          "error": "HTTP 404 (https://epgshare01.online/epgshare01/epg_ripper_PH1.txt)",
+          "url": "https://epgshare01.online/epgshare01/epg_ripper_PH1.txt"
         },
         {
           "region": "SA1",
@@ -68,23 +68,23 @@
       "catalogGeneratedAt": "2026-11-12T02:03:21.745Z"
     },
     "iptvorg": {
-      "channels": 1398,
-      "withData": 673,
-      "guideKB": 19458
+      "channels": 1399,
+      "withData": 760,
+      "guideKB": 10362
     },
     "epgpw": {
-      "channels": 370,
+      "channels": 384,
       "files": 20,
-      "withData": 367
+      "withData": 365
     },
     "epgbest": {
       "skipped": "EPG_BEST_URL not set (see README)"
     }
   },
-  "channelsWithData": 2958,
-  "lastGoodChannelsWithData": 2958,
+  "channelsWithData": 3023,
+  "lastGoodChannelsWithData": 3023,
   "gate": {
-    "prevChannelsWithData": 2999,
+    "prevChannelsWithData": 2958,
     "pass": true
   },
   "scan": {
@@ -94,17 +94,37 @@
     "perChannel": {}
   },
   "repair": {
-    "clipped": 23,
-    "dropped": 51,
+    "clipped": 538,
+    "dropped": 48,
     "perChannel": {
-      "69c5100c3d2597380f0f6422": 21,
-      "6ter.fr@SD": 16,
-      "SICAltaDefinicao.pt@SD": 14,
+      "TVSPinballNetwork.us@SD": 91,
+      "TVSHiTops.us@SD": 57,
+      "TVSTavern.us@SD": 39,
+      "TVSCipherNetwork.us@SD": 27,
+      "TVSNostalgia.us@SD": 26,
+      "TVSBoxing.us@SD": 24,
+      "TVSClassicSports.us@SD": 24,
+      "TVSComedyNetwork.us@SD": 24,
+      "TVSHollywoodHistory.us@SD": 24,
+      "TVSQuizShowNetwork.us@SD": 24,
+      "TVSSelectNetwork.us@SD": 24,
+      "TVSTallyHo.us@SD": 24,
+      "TVSTurbo.us@SD": 24,
+      "TVSWomenSports.us@SD": 24,
+      "TVSMainstreet.us@SD": 22,
+      "CNNIndonesia.id@SD": 20,
+      "6ter.fr@SD": 15,
+      "TVSDriveInMovie.us@SD": 14,
       "Gulli.fr@SD": 12,
-      "ANT1.gr@SD": 6,
-      "CNews.fr@SD": 2,
-      "MTV.de@SD": 2,
-      "TV5MondeAfrica.fr@SD": 1
+      "TVSNostalgiaMovies.us@SD": 11,
+      "TVSClassicMovies.us@SD": 10,
+      "TVSWesternMovie.us@SD": 10,
+      "TVRuzinov.sk@SD": 5,
+      "FoxSports1.us@HD": 4,
+      "UniversalCrime.us@East": 3,
+      "SolMusica.es@SD": 2,
+      "CodeHealthTV.bg@SD": 1,
+      "WorldPokerTour.us@US": 1
     }
   }
 }
